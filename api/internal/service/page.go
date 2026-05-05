@@ -17,6 +17,7 @@ var (
 	ErrPageReadOnly    = errors.New("no permission to edit this page")
 	ErrPageNotArchived = errors.New("page must be archived before deletion")
 	ErrPageBadParent   = errors.New("invalid parent page")
+	ErrPageBadRequest  = errors.New("invalid page request")
 )
 
 // PageService handles page business logic and permission gating.
@@ -225,10 +226,12 @@ func (s *PageService) Create(ctx context.Context, workspaceSlug string, projectI
 	if name == "" {
 		name = "Untitled page"
 	}
-	// Validate parent (if any) before insert so we never leave an orphan row.
+	// Validate parent (if any) before insert. We re-use loadAndCheckView so the
+	// caller must be able to *view* the proposed parent — not just be in the
+	// same workspace. This prevents creating a child under another user's
+	// private page where the parent would be inaccessible to the creator.
 	if parentID != nil {
-		parent, err := s.pageStore.GetByID(ctx, *parentID)
-		if err != nil || parent.WorkspaceID != workspaceID {
+		if _, _, err := s.loadAndCheckView(ctx, workspaceSlug, *parentID, userID); err != nil {
 			return nil, ErrPageBadParent
 		}
 	}
@@ -242,18 +245,11 @@ func (s *PageService) Create(ctx context.Context, workspaceSlug string, projectI
 		CreatedByID:     &userID,
 		UpdatedByID:     &userID,
 	}
-	if err := s.pageStore.Create(ctx, page); err != nil {
+	// Insert the page and its project_pages link in a single transaction so a
+	// failed link doesn't leave behind an orphan page that's invisible to the
+	// project's pages list.
+	if err := s.pageStore.CreateWithProjectLink(ctx, page, projectID, &userID); err != nil {
 		return nil, err
-	}
-	if projectID != nil {
-		if err := s.pageStore.AddProjectPage(ctx, &model.ProjectPage{
-			ProjectID:   *projectID,
-			PageID:      page.ID,
-			WorkspaceID: workspaceID,
-			CreatedByID: &userID,
-		}); err != nil {
-			return nil, err
-		}
 	}
 	// Initial version row so history is anchored from page-creation onward.
 	_ = s.pageStore.CreateVersion(ctx, &model.PageVersion{
@@ -266,8 +262,22 @@ func (s *PageService) Create(ctx context.Context, workspaceSlug string, projectI
 	return page, nil
 }
 
-// UpdateMeta changes name / access / parent. Owner-only.
-func (s *PageService) UpdateMeta(ctx context.Context, workspaceSlug string, pageID, userID uuid.UUID, name *string, access *int16, parentID *uuid.UUID, clearParent bool) (*model.Page, error) {
+// PageMetaUpdate carries the optional fields UpdateMeta accepts. nil values
+// are left untouched; zero values for required fields are validated.
+//
+// LogoProps is owner-editable like name/access/parent: passing a non-nil value
+// replaces the stored JSON, and SetLogoProps with a nil LogoProps clears it.
+type PageMetaUpdate struct {
+	Name         *string
+	Access       *int16
+	ParentID     *uuid.UUID
+	ClearParent  bool
+	LogoProps    model.JSONMap
+	SetLogoProps bool
+}
+
+// UpdateMeta changes name / access / parent / logo. Owner-only.
+func (s *PageService) UpdateMeta(ctx context.Context, workspaceSlug string, pageID, userID uuid.UUID, in PageMetaUpdate) (*model.Page, error) {
 	page, isMember, err := s.loadAndCheckView(ctx, workspaceSlug, pageID, userID)
 	if err != nil {
 		return nil, err
@@ -278,22 +288,25 @@ func (s *PageService) UpdateMeta(ctx context.Context, workspaceSlug string, page
 	if page.ArchivedAt != nil {
 		return nil, ErrPageArchived
 	}
-	if name != nil {
-		page.Name = strings.TrimSpace(*name)
+	if in.Name != nil {
+		page.Name = strings.TrimSpace(*in.Name)
 	}
-	if access != nil {
-		if *access != model.PageAccessPublic && *access != model.PageAccessPrivate {
-			return nil, ErrPageNotFound
+	if in.Access != nil {
+		if *in.Access != model.PageAccessPublic && *in.Access != model.PageAccessPrivate {
+			return nil, ErrPageBadRequest
 		}
-		page.Access = *access
+		page.Access = *in.Access
 	}
-	if clearParent {
+	if in.ClearParent {
 		page.ParentID = nil
-	} else if parentID != nil {
-		if err := s.validateParent(ctx, page, *parentID); err != nil {
+	} else if in.ParentID != nil {
+		if err := s.validateParent(ctx, workspaceSlug, page, *in.ParentID, userID); err != nil {
 			return nil, err
 		}
-		page.ParentID = parentID
+		page.ParentID = in.ParentID
+	}
+	if in.SetLogoProps {
+		page.LogoProps = in.LogoProps
 	}
 	page.UpdatedByID = &userID
 	if err := s.pageStore.Update(ctx, page); err != nil {
@@ -304,17 +317,17 @@ func (s *PageService) UpdateMeta(ctx context.Context, workspaceSlug string, page
 
 // validateParent rejects parents that would corrupt the tree:
 //   - same page as itself,
-//   - parent belongs to a different workspace,
+//   - caller cannot view the proposed parent,
 //   - parent is a descendant of the page being updated (cycle).
 //
 // Walks up the proposed parent's ancestor chain. Bounded by a max depth so a
 // pre-existing cycle in the data can't loop us forever.
-func (s *PageService) validateParent(ctx context.Context, page *model.Page, parentID uuid.UUID) error {
+func (s *PageService) validateParent(ctx context.Context, workspaceSlug string, page *model.Page, parentID, userID uuid.UUID) error {
 	if parentID == page.ID {
 		return ErrPageBadParent
 	}
-	parent, err := s.pageStore.GetByID(ctx, parentID)
-	if err != nil || parent.WorkspaceID != page.WorkspaceID {
+	parent, _, err := s.loadAndCheckView(ctx, workspaceSlug, parentID, userID)
+	if err != nil {
 		return ErrPageBadParent
 	}
 	const maxDepth = 64
@@ -393,13 +406,9 @@ func (s *PageService) Archive(ctx context.Context, workspaceSlug string, pageID,
 	if !canEditMeta(page, userID, isMember) {
 		return ErrPageReadOnly
 	}
-	if err := s.pageStore.Archive(ctx, page.ID); err != nil {
-		return err
-	}
-	// Cascade to descendants so users don't have to archive a tree page-by-page.
-	// Failures here leave a partially-archived tree, which is hard to repair
-	// from the UI — propagate so the caller sees a 500.
-	if err := s.pageStore.ArchiveDescendants(ctx, page.ID); err != nil {
+	// Archive the root and its descendants atomically so a failure doesn't
+	// leave a partially-archived subtree behind.
+	if err := s.pageStore.ArchiveTree(ctx, page.ID); err != nil {
 		return err
 	}
 	return nil
@@ -448,22 +457,13 @@ func (s *PageService) Duplicate(ctx context.Context, workspaceSlug string, pageI
 		CreatedByID:     &userID,
 		UpdatedByID:     &userID,
 	}
-	if err := s.pageStore.Create(ctx, dup); err != nil {
-		return nil, err
-	}
 	projectIDs, err := s.pageStore.ListProjectIDsForPage(ctx, src.ID)
 	if err != nil {
 		return nil, err
 	}
-	for _, pid := range projectIDs {
-		if err := s.pageStore.AddProjectPage(ctx, &model.ProjectPage{
-			ProjectID:   pid,
-			PageID:      dup.ID,
-			WorkspaceID: src.WorkspaceID,
-			CreatedByID: &userID,
-		}); err != nil {
-			return nil, err
-		}
+	// Create the duplicate page + every project_pages link atomically.
+	if err := s.pageStore.DuplicateInTransaction(ctx, dup, projectIDs, &userID); err != nil {
+		return nil, err
 	}
 	_ = s.pageStore.CreateVersion(ctx, &model.PageVersion{
 		PageID:              dup.ID,
