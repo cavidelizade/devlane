@@ -504,9 +504,7 @@ export function PageDetailPage() {
       {logo?.emoji?.value ? (
         <span className="text-base leading-none">{logo.emoji.value}</span>
       ) : null}
-      <span className="truncate font-medium text-(--txt-primary)">
-        {page.name || 'Untitled'}
-      </span>
+      <span className="truncate font-medium text-(--txt-primary)">{page.name || 'Untitled'}</span>
       {statusPill ? <span className="ml-2 shrink-0">{statusPill}</span> : null}
     </span>
   ) : null;

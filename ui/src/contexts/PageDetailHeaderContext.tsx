@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Provider + read/write hooks live together by design; matches WorkspaceViewsStateContext */
 import {
   createContext,
   useCallback,
