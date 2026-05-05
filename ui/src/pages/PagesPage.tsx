@@ -1,173 +1,95 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Avatar } from '../components/ui';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  Copy,
+  Filter,
+  Globe,
+  Lock,
+  MoreVertical,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+} from 'lucide-react';
+import { Button, Modal } from '../components/ui';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { pageService } from '../services/pageService';
+import { useAuth } from '../contexts/AuthContext';
 import type { WorkspaceApiResponse, ProjectApiResponse, PageApiResponse } from '../api/types';
 
-const IconSearch = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.3-4.3" />
-  </svg>
-);
-const IconCalendar = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
-const IconFilter = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-  </svg>
-);
-const IconGlobe = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-);
-const IconInfo = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <circle cx="12" cy="12" r="10" />
-    <path d="M12 16v-4" />
-    <path d="M12 8h.01" />
-  </svg>
-);
-const IconStar = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
-const IconMoreVertical = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <circle cx="12" cy="5" r="1.5" />
-    <circle cx="12" cy="12" r="1.5" />
-    <circle cx="12" cy="19" r="1.5" />
-  </svg>
-);
-const IconAlertTriangle = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    className="shrink-0 text-(--warning-default)"
-    aria-hidden
-  >
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-    <path d="M12 9v4" />
-    <path d="M12 17h.01" />
-  </svg>
-);
-const IconChevronDown = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-
 type PageTab = 'public' | 'private' | 'archived';
+type SortKey = 'updated' | 'created' | 'title';
+
+const SORT_LABELS: Record<SortKey, string> = {
+  updated: 'Date modified',
+  created: 'Date created',
+  title: 'Title (A→Z)',
+};
 
 export function PagesPage() {
   const { workspaceSlug, projectId } = useParams<{
     workspaceSlug: string;
     projectId: string;
   }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [tab, setTab] = useState<PageTab>('public');
   const [workspace, setWorkspace] = useState<WorkspaceApiResponse | null>(null);
   const [project, setProject] = useState<ProjectApiResponse | null>(null);
   const [pages, setPages] = useState<PageApiResponse[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('updated');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterLocked, setFilterLocked] = useState(false);
+  const [filterOwnedByMe, setFilterOwnedByMe] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createAccess, setCreateAccess] = useState<0 | 1>(0);
+  const [creating, setCreating] = useState(false);
+
+  const sortRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // ----- Initial load ------------------------------------------------------
   useEffect(() => {
     if (!workspaceSlug || !projectId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading when no slug/project (kept for future use)
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    const archived = tab === 'archived' ? 'archived' : 'inbox';
     Promise.all([
       workspaceService.getBySlug(workspaceSlug),
       projectService.get(workspaceSlug, projectId),
-      pageService.list(workspaceSlug, projectId),
+      pageService.list(workspaceSlug, { projectId, archived }),
+      pageService.listFavoriteIds(workspaceSlug).catch(() => [] as string[]),
     ])
-      .then(([w, p, list]) => {
-        if (!cancelled) {
-          setWorkspace(w ?? null);
-          setProject(p ?? null);
-          setPages(list ?? []);
-        }
+      .then(([w, p, list, favIds]) => {
+        if (cancelled) return;
+        setWorkspace(w ?? null);
+        setProject(p ?? null);
+        setPages(list ?? []);
+        setFavoriteIds(new Set(favIds));
       })
       .catch(() => {
-        if (!cancelled) {
-          setWorkspace(null);
-          setProject(null);
-          setPages([]);
-        }
+        if (cancelled) return;
+        setWorkspace(null);
+        setProject(null);
+        setPages([]);
+        setFavoriteIds(new Set());
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -175,20 +97,129 @@ export function PagesPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceSlug, projectId]);
+  }, [workspaceSlug, projectId, tab]);
 
-  const filteredPages =
-    tab === 'public'
-      ? pages.filter((p) => p.access === 0)
-      : tab === 'private'
-        ? pages.filter((p) => p.access === 1)
-        : pages.filter((p) => p.archived_at);
+  // ----- Click-outside dismissal -------------------------------------------
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (sortOpen && sortRef.current && !sortRef.current.contains(t)) setSortOpen(false);
+      if (filterOpen && filterRef.current && !filterRef.current.contains(t)) setFilterOpen(false);
+      if (openMenu && menuRef.current && !menuRef.current.contains(t)) setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [sortOpen, filterOpen, openMenu]);
 
-  const getUser = (userId: string | null): { name: string; avatarUrl?: string | null } | null => {
-    void userId; // reserved for future assignee display
-    return null;
+  // ----- Derived list ------------------------------------------------------
+  const visible = useMemo(() => {
+    let out = pages.slice();
+    if (tab === 'public') out = out.filter((p) => p.access === 0);
+    if (tab === 'private') out = out.filter((p) => p.access === 1);
+    // 'archived' tab — archived rows already returned by the server
+    if (filterLocked) out = out.filter((p) => p.is_locked);
+    if (filterOwnedByMe && user) out = out.filter((p) => p.owned_by_id === user.id);
+    const q = search.trim().toLowerCase();
+    if (q) out = out.filter((p) => (p.name ?? '').toLowerCase().includes(q));
+    out.sort((a, b) => {
+      switch (sortKey) {
+        case 'created':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'title':
+          return (a.name ?? '').localeCompare(b.name ?? '');
+        case 'updated':
+        default:
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      }
+    });
+    return out;
+  }, [pages, tab, filterLocked, filterOwnedByMe, user, search, sortKey]);
+
+  // ----- Actions -----------------------------------------------------------
+  const reload = async () => {
+    if (!workspaceSlug || !projectId) return;
+    const archived = tab === 'archived' ? 'archived' : 'inbox';
+    const list = await pageService.list(workspaceSlug, { projectId, archived });
+    setPages(list ?? []);
   };
 
+  const onToggleFavorite = async (pageId: string) => {
+    if (!workspaceSlug) return;
+    const isFav = favoriteIds.has(pageId);
+    const next = new Set(favoriteIds);
+    if (isFav) next.delete(pageId);
+    else next.add(pageId);
+    setFavoriteIds(next);
+    try {
+      if (isFav) await pageService.unfavorite(workspaceSlug, pageId);
+      else await pageService.favorite(workspaceSlug, pageId);
+    } catch {
+      // revert optimistic toggle
+      setFavoriteIds((prev) => {
+        const r = new Set(prev);
+        if (isFav) r.add(pageId);
+        else r.delete(pageId);
+        return r;
+      });
+    }
+  };
+
+  const onArchiveAction = async (pageId: string, currentlyArchived: boolean) => {
+    if (!workspaceSlug) return;
+    setOpenMenu(null);
+    try {
+      if (currentlyArchived) await pageService.unarchive(workspaceSlug, pageId);
+      else await pageService.archive(workspaceSlug, pageId);
+      await reload();
+    } catch {
+      // best-effort
+    }
+  };
+
+  const onDuplicate = async (pageId: string) => {
+    if (!workspaceSlug || !projectId) return;
+    setOpenMenu(null);
+    try {
+      const dup = await pageService.duplicate(workspaceSlug, pageId);
+      navigate(`/${workspaceSlug}/projects/${projectId}/pages/${dup.id}`);
+    } catch {
+      // best-effort
+    }
+  };
+
+  const onDelete = async (pageId: string) => {
+    if (!workspaceSlug) return;
+    setOpenMenu(null);
+    try {
+      await pageService.delete(workspaceSlug, pageId);
+      await reload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Delete failed';
+      window.alert(message);
+    }
+  };
+
+  const onCreate = async () => {
+    if (!workspaceSlug || !projectId) return;
+    setCreating(true);
+    try {
+      const created = await pageService.create(workspaceSlug, {
+        name: createName.trim() || 'Untitled page',
+        project_id: projectId,
+        access: createAccess,
+      });
+      setShowCreate(false);
+      setCreateName('');
+      setCreateAccess(0);
+      navigate(`/${workspaceSlug}/projects/${projectId}/pages/${created.id}`);
+    } catch {
+      // best-effort
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // ----- Render ------------------------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-(--txt-tertiary)">
@@ -204,129 +235,273 @@ export function PagesPage() {
 
   return (
     <div className="space-y-4">
-      {/* Tabs: Public | Private | Archived */}
-      <div className="flex gap-1 border-b border-(--border-subtle)">
-        {(['public', 'private', 'archived'] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`border-b-2 px-4 py-2.5 text-sm font-medium capitalize ${
-              tab === t
-                ? 'border-(--brand-default) text-(--txt-primary)'
-                : 'border-transparent text-(--txt-secondary) hover:text-(--txt-primary)'
-            }`}
-          >
-            {t === 'public' ? 'Public' : t === 'private' ? 'Private' : 'Archived'}
-          </button>
-        ))}
+      {/* Tabs + Create */}
+      <div className="flex items-center justify-between border-b border-(--border-subtle)">
+        <div className="flex gap-1">
+          {(['public', 'private', 'archived'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`border-b-2 px-4 py-2.5 text-sm font-medium capitalize ${
+                tab === t
+                  ? 'border-(--brand-default) text-(--txt-primary)'
+                  : 'border-transparent text-(--txt-secondary) hover:text-(--txt-primary)'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" variant="primary" onClick={() => setShowCreate(true)}>
+          <Plus size={14} /> Create page
+        </Button>
       </div>
 
-      {/* Toolbar: search, sort, filters */}
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          className="flex size-8 items-center justify-center rounded-md border border-(--border-subtle) bg-(--bg-layer-2) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-2-hover)"
-          aria-label="Search"
-        >
-          <IconSearch />
-        </button>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-2.5 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-2-hover)"
-          >
-            <IconCalendar /> Date modified <IconChevronDown />
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-2.5 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-2-hover)"
-          >
-            <IconFilter /> Filters <IconChevronDown />
-          </button>
+          {searchOpen ? (
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => {
+                if (!search) setSearchOpen(false);
+              }}
+              placeholder="Search pages…"
+              className="h-8 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-3 text-sm text-(--txt-primary) placeholder:text-(--txt-tertiary) focus:outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              className="flex size-8 items-center justify-center rounded-md border border-(--border-subtle) bg-(--bg-layer-2) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-2-hover)"
+              aria-label="Search"
+            >
+              <Search size={14} />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div ref={sortRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setSortOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-2.5 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-2-hover)"
+            >
+              {SORT_LABELS[sortKey]} <ChevronDown size={14} />
+            </button>
+            {sortOpen ? (
+              <div className="absolute right-0 z-10 mt-1 w-44 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-raised)">
+                {(['updated', 'created', 'title'] as SortKey[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      setSortKey(k);
+                      setSortOpen(false);
+                    }}
+                    className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-(--bg-layer-1-hover) ${
+                      sortKey === k ? 'text-(--txt-primary)' : 'text-(--txt-secondary)'
+                    }`}
+                  >
+                    {SORT_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div ref={filterRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setFilterOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-2.5 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-2-hover)"
+            >
+              <Filter size={14} /> Filters <ChevronDown size={14} />
+            </button>
+            {filterOpen ? (
+              <div className="absolute right-0 z-10 mt-1 w-52 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) p-2 shadow-(--shadow-raised)">
+                <label className="flex items-center gap-2 px-2 py-1.5 text-sm text-(--txt-primary)">
+                  <input
+                    type="checkbox"
+                    checked={filterLocked}
+                    onChange={(e) => setFilterLocked(e.target.checked)}
+                  />
+                  Locked
+                </label>
+                <label className="flex items-center gap-2 px-2 py-1.5 text-sm text-(--txt-primary)">
+                  <input
+                    type="checkbox"
+                    checked={filterOwnedByMe}
+                    onChange={(e) => setFilterOwnedByMe(e.target.checked)}
+                  />
+                  Owned by me
+                </label>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {/* Page list */}
       <div className="rounded-md border border-(--border-subtle) bg-(--bg-surface-1)">
-        {filteredPages.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-(--txt-tertiary)">No {tab} pages yet.</p>
         ) : (
           <ul className="divide-y divide-(--border-subtle)">
-            {filteredPages.map((page) => {
-              const updatedBy = getUser(page.updated_by_id ?? page.owned_by_id ?? null);
+            {visible.map((page) => {
+              const isFav = favoriteIds.has(page.id);
+              const isOwner = !!user && page.owned_by_id === user.id;
+              const isArchivedRow = !!page.archived_at;
               return (
-                <li key={page.id}>
+                <li key={page.id} className="group relative">
                   <Link
                     to={`${baseUrl}/pages/${page.id}`}
                     className="flex items-center gap-3 px-4 py-3 no-underline transition-colors hover:bg-(--bg-layer-1-hover)"
                   >
-                    {page.archived_at ? (
-                      <IconAlertTriangle />
-                    ) : (
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded border border-(--border-subtle) bg-(--bg-layer-2) text-(--txt-icon-tertiary)">
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                          <polyline points="14 2 14 8 20 8" />
-                        </svg>
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 font-medium text-(--txt-primary)">
-                      {page.title ?? page.name}
-                    </span>
-                    <div className="flex shrink-0 items-center gap-2 text-(--txt-icon-tertiary)">
-                      {updatedBy && (
-                        <Avatar
-                          name={updatedBy.name}
-                          src={updatedBy.avatarUrl}
-                          size="sm"
-                          className="h-6 w-6 text-[10px]"
-                        />
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded border border-(--border-subtle) bg-(--bg-layer-2) text-(--txt-icon-tertiary)">
+                      {isArchivedRow ? (
+                        <Archive size={16} />
+                      ) : page.is_locked ? (
+                        <Lock size={16} />
+                      ) : (
+                        <Globe size={16} />
                       )}
-                      <span
-                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-                        title="Visibility"
-                      >
-                        <IconGlobe />
-                      </span>
-                      <span
-                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-                        title="Info"
-                      >
-                        <IconInfo />
-                      </span>
-                      <span
-                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-                        title="Favorite"
-                      >
-                        <IconStar />
-                      </span>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-(--txt-primary)">
+                      {page.name || 'Untitled'}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1 text-(--txt-icon-tertiary)">
                       <button
                         type="button"
-                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-                        aria-label="More options"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
+                          void onToggleFavorite(page.id);
                         }}
+                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
+                        title={isFav ? 'Unfavorite' : 'Favorite'}
                       >
-                        <IconMoreVertical />
+                        <Star
+                          size={14}
+                          className={isFav ? 'fill-(--brand-default) text-(--brand-default)' : ''}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenMenu((m) => (m === page.id ? null : page.id));
+                        }}
+                        aria-label="More options"
+                        className="flex size-8 items-center justify-center rounded hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
+                      >
+                        <MoreVertical size={14} />
                       </button>
                     </div>
                   </Link>
+                  {openMenu === page.id ? (
+                    <div
+                      ref={menuRef}
+                      className="absolute top-12 right-4 z-10 w-48 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-raised)"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void onDuplicate(page.id)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+                      >
+                        <Copy size={14} /> Duplicate
+                      </button>
+                      {isOwner ? (
+                        <button
+                          type="button"
+                          onClick={() => void onArchiveAction(page.id, isArchivedRow)}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+                        >
+                          {isArchivedRow ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                          {isArchivedRow ? 'Unarchive' : 'Archive'}
+                        </button>
+                      ) : null}
+                      {isOwner && isArchivedRow ? (
+                        <button
+                          type="button"
+                          onClick={() => void onDelete(page.id)}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--danger-default) hover:bg-(--danger-50)"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+
+      {showCreate ? (
+        <Modal open onClose={() => setShowCreate(false)} title="Create page">
+          <div className="max-w-md space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Title</label>
+              <input
+                autoFocus
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="Untitled page"
+                className="w-full rounded border border-(--border-subtle) bg-(--bg-canvas) px-3 py-1.5 text-sm text-(--txt-primary) placeholder:text-(--txt-tertiary) focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">
+                Visibility
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateAccess(0)}
+                  className={`flex-1 rounded border px-3 py-1.5 text-sm ${
+                    createAccess === 0
+                      ? 'border-(--brand-default) text-(--txt-primary)'
+                      : 'border-(--border-subtle) text-(--txt-secondary)'
+                  }`}
+                >
+                  Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateAccess(1)}
+                  className={`flex-1 rounded border px-3 py-1.5 text-sm ${
+                    createAccess === 1
+                      ? 'border-(--brand-default) text-(--txt-primary)'
+                      : 'border-(--border-subtle) text-(--txt-secondary)'
+                  }`}
+                >
+                  Private
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button size="sm" variant="secondary" onClick={() => setShowCreate(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={creating}
+                onClick={() => void onCreate()}
+              >
+                {creating ? 'Creating…' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
