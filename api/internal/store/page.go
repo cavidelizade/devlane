@@ -33,6 +33,98 @@ func (s *PageStore) Create(ctx context.Context, p *model.Page) error {
 	return s.db.WithContext(ctx).Create(p).Error
 }
 
+// CreateWithProjectLink inserts a page and, when projectID is non-nil, the
+// matching project_pages link in a single transaction. This avoids leaving an
+// orphan workspace page when the link insert fails. The page argument is
+// updated in place with the generated ID.
+func (s *PageStore) CreateWithProjectLink(ctx context.Context, p *model.Page, projectID *uuid.UUID, createdByID *uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(p).Error; err != nil {
+			return err
+		}
+		if projectID != nil {
+			link := &model.ProjectPage{
+				ProjectID:   *projectID,
+				PageID:      p.ID,
+				WorkspaceID: p.WorkspaceID,
+				CreatedByID: createdByID,
+			}
+			if err := tx.Create(link).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DuplicateInTransaction copies a page along with its project_pages links in
+// one transaction. Returns the new page (updated in place).
+func (s *PageStore) DuplicateInTransaction(ctx context.Context, dup *model.Page, projectIDs []uuid.UUID, createdByID *uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(dup).Error; err != nil {
+			return err
+		}
+		for _, pid := range projectIDs {
+			link := &model.ProjectPage{
+				ProjectID:   pid,
+				PageID:      dup.ID,
+				WorkspaceID: dup.WorkspaceID,
+				CreatedByID: createdByID,
+			}
+			if err := tx.Create(link).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// ArchiveTree archives a page and all its descendants in one transaction so
+// failures don't leave a partially-archived subtree behind.
+func (s *PageStore) ArchiveTree(ctx context.Context, rootID uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		if err := tx.Model(&model.Page{}).
+			Where("id = ?", rootID).Update("archived_at", now).Error; err != nil {
+			return err
+		}
+		if tx.Dialector.Name() == "postgres" {
+			return tx.Exec(`
+				WITH RECURSIVE descendants AS (
+					SELECT id FROM pages WHERE parent_id = ? AND deleted_at IS NULL
+					UNION ALL
+					SELECT p.id FROM pages p
+					JOIN descendants d ON p.parent_id = d.id
+					WHERE p.deleted_at IS NULL
+				)
+				UPDATE pages SET archived_at = NOW(), updated_at = NOW()
+				WHERE id IN (SELECT id FROM descendants) AND archived_at IS NULL
+			`, rootID).Error
+		}
+		// Iterative fallback for non-Postgres (sqlite tests).
+		queue := []uuid.UUID{rootID}
+		for len(queue) > 0 {
+			next := queue[0]
+			queue = queue[1:]
+			var children []model.Page
+			if err := tx.
+				Where("parent_id = ? AND deleted_at IS NULL", next).Find(&children).Error; err != nil {
+				return err
+			}
+			for _, c := range children {
+				if c.ArchivedAt == nil {
+					if err := tx.Model(&model.Page{}).
+						Where("id = ?", c.ID).Update("archived_at", now).Error; err != nil {
+						return err
+					}
+				}
+				queue = append(queue, c.ID)
+			}
+		}
+		return nil
+	})
+}
+
 func (s *PageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Page, error) {
 	var page model.Page
 	err := s.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&page).Error
