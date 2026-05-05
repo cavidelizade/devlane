@@ -93,8 +93,11 @@ export function SnoozeMenu({ snoozedUntil, onSnooze, onUnsnooze }: Props) {
           </button>
           <div className="my-1 h-px bg-(--border-subtle)" />
           <div className="px-3 py-2">
-            <label className="block text-xs text-(--txt-tertiary)">Custom</label>
+            <label htmlFor="snooze-custom-time" className="block text-xs text-(--txt-tertiary)">
+              Custom
+            </label>
             <input
+              id="snooze-custom-time"
               type="datetime-local"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
