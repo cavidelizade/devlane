@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { Avatar, Button, Tooltip } from '../ui';
 import { Dropdown } from '../work-item';
 import { useModulesFilter } from '../../contexts/ModulesFilterContext';
+import { usePageDetailHeader } from '../../contexts/PageDetailHeaderContext';
 import { useWorkspaceViewsState } from '../../contexts/WorkspaceViewsStateContext';
 import {
   WorkspaceViewsFiltersDropdown,
@@ -41,6 +42,7 @@ import {
   PROJECT_CYCLES_FILTER_EVENT,
   PROJECT_CYCLES_REFRESH_EVENT,
 } from '../../lib/projectCyclesEvents';
+import { PROJECT_PAGES_CREATE_EVENT } from '../../lib/projectPagesEvents';
 import { dispatchOpenHomeWidgets } from '../../lib/homeWidgetsEvents';
 import {
   DEFAULT_PROJECT_ISSUES_FILTERS,
@@ -56,7 +58,15 @@ import {
   toDisplayPayload,
   type ProjectIssuesDisplayState,
 } from '../../lib/projectIssuesDisplay';
-import { PROJECT_VIEWS_FILTER_EVENT } from '../../lib/projectViewsEvents';
+import {
+  PROJECT_VIEWS_FILTER_EVENT,
+  PROJECT_VIEWS_REFRESH_EVENT,
+} from '../../lib/projectViewsEvents';
+import {
+  parseWorkspaceViewFiltersFromSearchParams,
+  workspaceViewFiltersToSearchParams,
+  type WorkspaceViewFilters,
+} from '../../types/workspaceViewFilters';
 import { slugify } from '../../lib/slug';
 import { MODULE_WORK_ITEMS_COUNT_EVENT } from '../../lib/moduleWorkItemsPrefs';
 import { parseProjectsListSearchParams } from '../../lib/projectsListSearchParams';
@@ -2341,11 +2351,14 @@ function ProjectSectionHeader({
     }
     if (section === 'pages') {
       return (
-        <Link to={`${baseUrl}/pages/new`}>
-          <Button size="sm" className="gap-1.5 text-[13px] font-medium">
-            <IconPlus /> Add page
-          </Button>
-        </Link>
+        <Button
+          size="sm"
+          className="gap-1.5 text-[13px] font-medium"
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent(PROJECT_PAGES_CREATE_EVENT))}
+        >
+          <IconPlus /> Add page
+        </Button>
       );
     }
     if (section === 'views') {
@@ -3166,22 +3179,65 @@ function ProjectSavedViewDetailHeader({
 }) {
   void _issueCount;
   const navigate = useNavigate();
-  const { filters: workspaceViewFilters } = useWorkspaceViewsState();
+  const { filters: workspaceViewFilters, setFilters: setWorkspaceViewFilters } =
+    useWorkspaceViewsState();
   const baseUrl = `/${workspaceSlug}/projects/${projectId}`;
   const issuesUrl = `${baseUrl}/issues`;
   const [viewTitle, setViewTitle] = useState<string>('…');
+  // Snapshot of the view's persisted filters in WorkspaceViewFilters shape.
+  // Used for dirty detection ("Save filters" button) and reset.
+  const [savedFilters, setSavedFilters] = useState<WorkspaceViewFilters | null>(null);
+  const [savingFilters, setSavingFilters] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState('');
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
   const [filtersDropdownOpen, setFiltersDropdownOpen] = useState<string | null>(null);
   const projectDropdownRef = useRef<HTMLDivElement | null>(null);
 
+  // Pulls the view from the API and seeds title + savedFilters snapshot.
+  // The view's `filters` JSON is a flat `Record<string, string>` matching the
+  // search-params shape used by parseWorkspaceViewFiltersFromSearchParams.
+  const refreshView = useRef<() => Promise<void>>(async () => {});
+  refreshView.current = async () => {
+    try {
+      const v = await viewService.get(workspaceSlug, viewId);
+      setViewTitle(v?.name?.trim() ? v.name : 'View');
+      const raw = v?.filters;
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const params = new URLSearchParams();
+        for (const [k, val] of Object.entries(raw as Record<string, unknown>)) {
+          if (val == null) continue;
+          const s = String(val).trim();
+          if (s) params.set(k, s);
+        }
+        setSavedFilters(parseWorkspaceViewFiltersFromSearchParams(params));
+      } else {
+        setSavedFilters(parseWorkspaceViewFiltersFromSearchParams(new URLSearchParams()));
+      }
+    } catch {
+      setViewTitle('View');
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const v = await viewService.get(workspaceSlug, viewId);
-        if (!cancelled) setViewTitle(v?.name?.trim() ? v.name : 'View');
+        if (cancelled) return;
+        setViewTitle(v?.name?.trim() ? v.name : 'View');
+        const raw = v?.filters;
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          const params = new URLSearchParams();
+          for (const [k, val] of Object.entries(raw as Record<string, unknown>)) {
+            if (val == null) continue;
+            const s = String(val).trim();
+            if (s) params.set(k, s);
+          }
+          setSavedFilters(parseWorkspaceViewFiltersFromSearchParams(params));
+        } else {
+          setSavedFilters(parseWorkspaceViewFiltersFromSearchParams(new URLSearchParams()));
+        }
       } catch {
         if (!cancelled) setViewTitle('View');
       }
@@ -3190,6 +3246,47 @@ function ProjectSavedViewDetailHeader({
       cancelled = true;
     };
   }, [workspaceSlug, viewId]);
+
+  // Reload the snapshot when the view is edited from elsewhere (rename/etc.
+  // dispatch this event) so the comparison against saved filters stays fresh.
+  useEffect(() => {
+    const handler = () => {
+      void refreshView.current();
+    };
+    window.addEventListener(PROJECT_VIEWS_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(PROJECT_VIEWS_REFRESH_EVENT, handler);
+  }, []);
+
+  // Dirty detection: serialize both filter sets to the same canonical
+  // search-params record and string-compare. Cheap and good enough.
+  const filtersDirty = (() => {
+    if (!savedFilters) return false;
+    const a = JSON.stringify(workspaceViewFiltersToSearchParams(workspaceViewFilters));
+    const b = JSON.stringify(workspaceViewFiltersToSearchParams(savedFilters));
+    return a !== b;
+  })();
+
+  const handleSaveFilters = async () => {
+    if (!filtersDirty || savingFilters) return;
+    setSavingFilters(true);
+    try {
+      const payload = workspaceViewFiltersToSearchParams(workspaceViewFilters);
+      await viewService.update(workspaceSlug, viewId, {
+        filters: payload as Record<string, unknown>,
+      });
+      setSavedFilters(workspaceViewFilters);
+      window.dispatchEvent(new CustomEvent(PROJECT_VIEWS_REFRESH_EVENT));
+    } catch {
+      // Surface no toast — the dirty banner remains so the user can retry.
+    } finally {
+      setSavingFilters(false);
+    }
+  };
+
+  const handleResetFilters = () => {
+    if (!savedFilters) return;
+    setWorkspaceViewFilters(savedFilters);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -3389,6 +3486,27 @@ function ProjectSavedViewDetailHeader({
           )}
         </div>
         <ProjectSavedViewDisplayDropdown />
+        {filtersDirty && (
+          <>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleResetFilters}
+              disabled={savingFilters}
+              className="gap-1.5 text-[13px] font-medium"
+            >
+              Reset
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void handleSaveFilters()}
+              disabled={savingFilters}
+              className="gap-1.5 text-[13px] font-medium"
+            >
+              {savingFilters ? 'Saving…' : 'Save filters'}
+            </Button>
+          </>
+        )}
         <Link to={`${baseUrl}/views/${viewId}?create=1`}>
           <Button size="sm" className="gap-1.5 text-[13px] font-medium">
             <IconPlus /> Add work item
@@ -3405,16 +3523,83 @@ function ProjectSavedViewDetailHeader({
 }
 
 // ---------------------------------------------------------------------------
+// PageDetailHeader (project icon + breadcrumb + page-actions slot)
+// ---------------------------------------------------------------------------
+
+/**
+ * Header rendered for `/:slug/projects/:projectId/pages/:pageId`. Mirrors
+ * Plane's page-detail header — a single top row that contains the project
+ * breadcrumb on the left and the per-page action cluster on the right
+ * (lock / link / star / more / panel-toggle). The actions slot is filled by
+ * `PageDetailPage` via `useSetPageDetailHeader` so this component stays
+ * stateless about the page itself.
+ */
+function PageDetailHeader({
+  workspaceSlug,
+  projectId,
+  project,
+}: {
+  workspaceSlug: string;
+  projectId: string;
+  project: ProjectApiResponse;
+}) {
+  const { breadcrumb, actions } = usePageDetailHeader();
+  const projectBase = `/${workspaceSlug}/projects/${projectId}`;
+  return (
+    <>
+      <nav
+        aria-label="Breadcrumb"
+        className="flex min-w-0 items-center gap-1.5 text-[13px] text-(--txt-secondary)"
+      >
+        <Link
+          to={projectBase}
+          className="flex items-center gap-1.5 truncate font-medium text-(--txt-primary) no-underline hover:text-(--txt-accent-primary)"
+        >
+          <span className="flex size-5 shrink-0 items-center justify-center">
+            <ProjectIconDisplay
+              emoji={project.emoji}
+              icon_prop={project.icon_prop}
+              size={16}
+              className="leading-none"
+            />
+          </span>
+          <span className="truncate">{project.name}</span>
+        </Link>
+        <span aria-hidden className="text-(--txt-tertiary)">
+          /
+        </span>
+        <Link
+          to={`${projectBase}/pages`}
+          className="truncate no-underline hover:text-(--txt-primary)"
+        >
+          Pages
+        </Link>
+        {breadcrumb ? (
+          <>
+            <span aria-hidden className="text-(--txt-tertiary)">
+              /
+            </span>
+            <span className="flex min-w-0 items-center">{breadcrumb}</span>
+          </>
+        ) : null}
+      </nav>
+      <div className="flex shrink-0 items-center gap-1">{actions}</div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // PageHeader
 // ---------------------------------------------------------------------------
 
 export function PageHeader() {
   const location = useLocation();
-  const { workspaceSlug, projectId, moduleId, viewId } = useParams<{
+  const { workspaceSlug, projectId, moduleId, viewId, pageId } = useParams<{
     workspaceSlug?: string;
     projectId?: string;
     moduleId?: string;
     viewId?: string;
+    pageId?: string;
   }>();
   const [workspace, setWorkspace] = useState<WorkspaceApiResponse | null>(null);
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
@@ -3542,6 +3727,8 @@ export function PageHeader() {
   const isProjectSavedViewDetailPage =
     projectBase && !!viewId && pathNoTrailingSlash === `${projectBase}/views/${viewId}`;
   const isPagesPage = projectBase && pathname === `${projectBase}/pages`;
+  const isPageDetailPage =
+    projectBase && !!pageId && pathNoTrailingSlash === `${projectBase}/pages/${pageId}`;
   const isProjectSection =
     isIssuesPage || isCyclesPage || isModulesPage || isViewsListPage || isPagesPage;
   const isProjectDetail =
@@ -3609,6 +3796,10 @@ export function PageHeader() {
         viewId={viewId}
         issueCount={projectIssueCount}
       />
+    );
+  } else if (isPageDetailPage && workspaceSlug && projectId && project) {
+    content = (
+      <PageDetailHeader workspaceSlug={workspaceSlug} projectId={projectId} project={project} />
     );
   } else if (isProjectSection && workspaceSlug && projectId && project && projectSection) {
     content = (
