@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	ErrPageNotFound = errors.New("page not found")
-	ErrPageLocked   = errors.New("page is locked")
-	ErrPageArchived = errors.New("page is archived")
-	ErrPageReadOnly = errors.New("no permission to edit this page")
+	ErrPageNotFound    = errors.New("page not found")
+	ErrPageLocked      = errors.New("page is locked")
+	ErrPageArchived    = errors.New("page is archived")
+	ErrPageReadOnly    = errors.New("no permission to edit this page")
 	ErrPageNotArchived = errors.New("page must be archived before deletion")
 )
 

@@ -61,10 +61,10 @@ func TestPagePermissions(t *testing.T) {
 
 func TestStripHTML(t *testing.T) {
 	tests := map[string]string{
-		"":                            "",
-		"<p>hello world</p>":          "hello world",
-		"<p>hi <b>there</b></p>":      "hi there",
-		"<p>line1</p>\n<p>line2</p>":  "line1 line2",
+		"":                           "",
+		"<p>hello world</p>":         "hello world",
+		"<p>hi <b>there</b></p>":     "hi there",
+		"<p>line1</p>\n<p>line2</p>": "line1 line2",
 		`<p>tag with attr <span data-type="x">@bob</span></p>`: "tag with attr @bob",
 	}
 	for in, want := range tests {

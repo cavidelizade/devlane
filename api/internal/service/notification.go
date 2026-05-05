@@ -23,11 +23,11 @@ import (
 type NotificationService struct {
 	ns    *store.NotificationStore
 	ws    *store.WorkspaceStore
-	is    *store.IssueStore            // for assignee + creator lookups (receiver computation)
-	ps    *store.ProjectStore          // for project-membership filter
-	us    *store.UserStore             // for actor display name
-	ss    *store.StateStore            // for state name resolution in Message payload
-	subs  *store.IssueSubscriberStore  // optional — subscriber-based receivers
+	is    *store.IssueStore                      // for assignee + creator lookups (receiver computation)
+	ps    *store.ProjectStore                    // for project-membership filter
+	us    *store.UserStore                       // for actor display name
+	ss    *store.StateStore                      // for state name resolution in Message payload
+	subs  *store.IssueSubscriberStore            // optional — subscriber-based receivers
 	prefs *store.UserNotificationPreferenceStore // optional — preference gating
 	log   *slog.Logger
 }
@@ -194,10 +194,10 @@ type emitParams struct {
 	issue           *model.Issue
 	actorID         uuid.UUID
 	sender          string
-	field           string // optional, for change notifications
-	before, after   string // optional, denormalized human-readable values
-	commentPreview  string // optional, for `commented`
-	mentionContext  string // "description" | "comment", used for sender=mentioned
+	field           string               // optional, for change notifications
+	before, after   string               // optional, denormalized human-readable values
+	commentPreview  string               // optional, for `commented`
+	mentionContext  string               // "description" | "comment", used for sender=mentioned
 	classifyMention func(uuid.UUID) bool // optional, returns true if receiver should get sender=mentioned instead of params.sender
 }
 
