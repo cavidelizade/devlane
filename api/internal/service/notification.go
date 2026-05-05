@@ -614,8 +614,10 @@ func dedupExclude(receivers []uuid.UUID, exclude uuid.UUID) []uuid.UUID {
 	return out
 }
 
-// stripPreview reduces an HTML/rich-text snippet to plain text and trims to maxLen.
-// Cheap heuristic: drop tags, collapse whitespace, hard-truncate. Good enough for previews.
+// stripPreview reduces an HTML/rich-text snippet to plain text and trims to
+// maxLen runes. Truncating by rune (not byte) keeps multi-byte UTF-8 sequences
+// intact; otherwise a slice could cut a code point in half and corrupt the
+// preview stored in the notification payload.
 func stripPreview(htmlContent string, maxLen int) string {
 	if htmlContent == "" {
 		return ""
@@ -633,8 +635,9 @@ func stripPreview(htmlContent string, maxLen int) string {
 		}
 	}
 	out := strings.Join(strings.Fields(b.String()), " ")
-	if len(out) > maxLen {
-		out = strings.TrimSpace(out[:maxLen]) + "…"
+	runes := []rune(out)
+	if len(runes) > maxLen {
+		out = strings.TrimSpace(string(runes[:maxLen])) + "…"
 	}
 	return out
 }
