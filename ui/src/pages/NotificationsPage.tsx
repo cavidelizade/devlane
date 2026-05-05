@@ -304,6 +304,7 @@ export function NotificationsPage() {
                     </button>
                     <button
                       type="button"
+                      aria-label={isArchived ? 'Unarchive' : 'Archive'}
                       title={isArchived ? 'Unarchive' : 'Archive'}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -313,7 +314,9 @@ export function NotificationsPage() {
                           void onArchiveRow(n.id);
                         }
                       }}
-                      className="absolute top-2 right-2 hidden rounded p-1 text-(--txt-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) group-hover:block"
+                      // Keep tabbable / focusable; visually fade in on hover or focus
+                      // so keyboard users can still reach the action.
+                      className="absolute top-2 right-2 rounded p-1 text-(--txt-tertiary) opacity-0 hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) focus:opacity-100 group-hover:opacity-100"
                     >
                       {isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                     </button>
