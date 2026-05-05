@@ -601,7 +601,6 @@ export interface IssueViewApiResponse {
   display_properties?: Record<string, unknown>;
   access?: number | 'public' | 'private';
   sort_order?: number;
-  anchor?: string | null;
   is_favorite?: boolean;
   owned_by?: string;
   owned_by_id: string;
@@ -650,6 +649,8 @@ export interface UpdatePageRequest {
   access?: number;
   parent_id?: string | null;
   clear_parent?: boolean;
+  /** Emoji or icon used as the page's logo. Pass `null` to clear. */
+  logo_props?: Record<string, unknown> | null;
 }
 
 export interface UpdatePageContentRequest {
