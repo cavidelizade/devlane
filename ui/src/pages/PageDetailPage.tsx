@@ -3,25 +3,34 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
-  ChevronRight,
   Copy,
-  Globe,
+  ExternalLink,
+  FileText,
   History,
+  Link2,
   Lock,
+  MoreHorizontal,
+  PanelRight,
+  PanelRightClose,
   Plus,
   Star,
   Trash2,
   Unlock,
 } from 'lucide-react';
-import { Button, Modal } from '../components/ui';
+import { Button, Modal, Tooltip } from '../components/ui';
 import {
-  PageDescriptionEditor,
-  type PageDescriptionEditorHandle,
-} from '../components/PageDescriptionEditor';
+  EmojiLogoPicker,
+  PageEditorContent,
+  PageEditorToolbar,
+  usePageEditor,
+  type PageLogo,
+} from '../components/page-editor';
 import { useAuth } from '../contexts/AuthContext';
+import { useSetPageDetailHeader } from '../contexts/PageDetailHeaderContext';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { pageService } from '../services/pageService';
+import { cn } from '../lib/utils';
 import type {
   PageApiResponse,
   PageVersionApiResponse,
@@ -50,6 +59,14 @@ function formatRelative(at: number): string {
   return `${day}d ago`;
 }
 
+function pageLogoFrom(page: PageApiResponse | null): PageLogo | undefined {
+  const props = page?.logo_props as PageLogo | undefined;
+  if (!props || props.in_use !== 'emoji' || !props.emoji?.value) return undefined;
+  return props;
+}
+
+type SidePanel = 'closed' | 'subpages' | 'versions';
+
 export function PageDetailPage() {
   const { workspaceSlug, projectId, pageId } = useParams<{
     workspaceSlug: string;
@@ -70,79 +87,20 @@ export function PageDetailPage() {
   const [bodyStatus, setBodyStatus] = useState<SaveStatus>({ kind: 'idle' });
 
   const [isFavorite, setIsFavorite] = useState(false);
-  const [showVersions, setShowVersions] = useState(false);
-  const [showSubpages, setShowSubpages] = useState(true);
+  // Closed by default — match Plane's page-detail header where the panel
+  // toggle reveals sub-pages / history on demand.
+  const [sidePanel, setSidePanel] = useState<SidePanel>('closed');
   const [versions, setVersions] = useState<PageVersionApiResponse[] | null>(null);
   const [previewVersion, setPreviewVersion] = useState<PageVersionApiResponse | null>(null);
   const [children, setChildren] = useState<PageApiResponse[] | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
-  const editorRef = useRef<PageDescriptionEditorHandle>(null);
   const titleSaveTimer = useRef<number | null>(null);
   const bodySaveTimer = useRef<number | null>(null);
   const lastSavedHtml = useRef<string>('');
-  // Sequence numbers for autosaves so a slow older request can't overwrite
-  // newer state when responses arrive out of order.
-  const titleSaveSeq = useRef(0);
-  const titleAppliedSeq = useRef(0);
-  const bodySaveSeq = useRef(0);
-  const bodyAppliedSeq = useRef(0);
-  // Latest editor HTML / title input — read in cleanup to flush unsaved edits.
-  const latestTitleRef = useRef('');
-  const latestPageIdRef = useRef<string | null>(null);
-  const latestSlugRef = useRef<string | null>(null);
-
-  // ----- Initial load ------------------------------------------------------
-  useEffect(() => {
-    if (!workspaceSlug || !projectId || !pageId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when params absent
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setNotFound(false);
-    Promise.all([
-      workspaceService.getBySlug(workspaceSlug),
-      projectService.get(workspaceSlug, projectId),
-      pageService.get(workspaceSlug, pageId),
-      pageService.listFavoriteIds(workspaceSlug).catch(() => [] as string[]),
-    ])
-      .then(([w, p, pg, favIds]) => {
-        if (cancelled) return;
-        setWorkspace(w ?? null);
-        setProject(p ?? null);
-        setPage(pg);
-        setTitleInput(pg.name ?? '');
-        lastSavedHtml.current = pg.description_html ?? '<p></p>';
-        latestTitleRef.current = pg.name ?? '';
-        latestPageIdRef.current = pg.id;
-        latestSlugRef.current = workspaceSlug;
-        setIsFavorite(favIds.includes(pg.id));
-        // Reset page-scoped state so we don't show the previous page's data.
-        setVersions(null);
-        setPreviewVersion(null);
-        setChildren(null);
-        setTitleStatus({ kind: 'idle' });
-        setBodyStatus({ kind: 'idle' });
-        titleSaveSeq.current = 0;
-        titleAppliedSeq.current = 0;
-        bodySaveSeq.current = 0;
-        bodyAppliedSeq.current = 0;
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setNotFound(true);
-          setPage(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, projectId, pageId]);
+  const optionsRef = useRef<HTMLDivElement>(null);
 
   // ----- Permissions (mirror service: canEditContent / canEditMeta) -------
   const isOwner = !!page && !!user && page.owned_by_id === user.id;
@@ -153,24 +111,114 @@ export function PageDetailPage() {
   const canEditMeta = isOwner;
   const editorReadOnly = !canEditContent;
 
+  // ----- Body autosave -----------------------------------------------------
+  const saveBodyNow = useCallback(
+    async (html: string) => {
+      if (!workspaceSlug || !page) return;
+      if (html === lastSavedHtml.current) return;
+      setBodyStatus({ kind: 'saving' });
+      try {
+        const updated = await pageService.updateContent(workspaceSlug, page.id, html);
+        lastSavedHtml.current = html;
+        setPage(updated);
+        setBodyStatus({ kind: 'saved', at: Date.now() });
+      } catch (err) {
+        setBodyStatus({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'Save failed',
+        });
+      }
+    },
+    [workspaceSlug, page],
+  );
+
+  const onEditorUpdate = useCallback(
+    (html: string) => {
+      if (!canEditContent) return;
+      if (bodySaveTimer.current) window.clearTimeout(bodySaveTimer.current);
+      bodySaveTimer.current = window.setTimeout(() => {
+        void saveBodyNow(html);
+      }, AUTOSAVE_DEBOUNCE_MS);
+    },
+    [canEditContent, saveBodyNow],
+  );
+
+  // The editor instance is needed by `onSaveShortcut` so we can flush the
+  // current HTML on Cmd/Ctrl+S. We stash a ref bridge to break the
+  // bootstrap cycle between `usePageEditor(opts)` and `opts.onSaveShortcut`.
+  const editorRef = useRef<ReturnType<typeof usePageEditor>>(null);
+  const onSaveShortcut = useCallback(() => {
+    if (bodySaveTimer.current) {
+      window.clearTimeout(bodySaveTimer.current);
+      bodySaveTimer.current = null;
+    }
+    const html = editorRef.current?.getHTML();
+    if (html !== undefined) void saveBodyNow(html);
+  }, [saveBodyNow]);
+
+  const editor = usePageEditor({
+    initialHtml: page?.description_html ?? '<p></p>',
+    placeholder: 'Start writing… or press “/” for commands',
+    readOnly: editorReadOnly,
+    onUpdate: onEditorUpdate,
+    onSaveShortcut,
+  });
+  // Mirror the latest editor instance into the ref so non-render code (key
+  // handlers, save flushes) can reach it without re-deriving callback identity.
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  // ----- Initial load ------------------------------------------------------
+  useEffect(() => {
+    // No route params? React Router shouldn't allow this for the
+    // /:workspaceSlug/projects/:projectId/pages/:pageId path, but bail safely.
+    if (!workspaceSlug || !projectId || !pageId) return undefined;
+    let cancelled = false;
+    // setState calls live inside the async chain (not the effect body) so the
+    // react-hooks/set-state-in-effect rule stays happy.
+    void (async () => {
+      try {
+        const [w, p, pg, favIds] = await Promise.all([
+          workspaceService.getBySlug(workspaceSlug),
+          projectService.get(workspaceSlug, projectId),
+          pageService.get(workspaceSlug, pageId),
+          pageService.listFavoriteIds(workspaceSlug).catch(() => [] as string[]),
+        ]);
+        if (cancelled) return;
+        setWorkspace(w ?? null);
+        setProject(p ?? null);
+        setPage(pg);
+        setTitleInput(pg.name ?? '');
+        lastSavedHtml.current = pg.description_html ?? '<p></p>';
+        setIsFavorite(favIds.includes(pg.id));
+        setNotFound(false);
+      } catch {
+        if (!cancelled) {
+          setNotFound(true);
+          setPage(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceSlug, projectId, pageId]);
+
   // ----- Title autosave ----------------------------------------------------
-  // Race-safe: only the most recent in-flight request gets to update local state.
   const saveTitleNow = useCallback(
     async (next: string) => {
       if (!workspaceSlug || !page) return;
       const trimmed = next.trim();
       if (trimmed === page.name) return;
-      const seq = ++titleSaveSeq.current;
       setTitleStatus({ kind: 'saving' });
       try {
         const updated = await pageService.update(workspaceSlug, page.id, { name: trimmed });
-        if (seq < titleAppliedSeq.current) return;
-        titleAppliedSeq.current = seq;
         setPage(updated);
         setTitleStatus({ kind: 'saved', at: Date.now() });
       } catch (err) {
-        if (seq < titleAppliedSeq.current) return;
-        titleAppliedSeq.current = seq;
         setTitleStatus({
           kind: 'error',
           message: err instanceof Error ? err.message : 'Save failed',
@@ -182,7 +230,6 @@ export function PageDetailPage() {
 
   const onTitleChange = (v: string) => {
     setTitleInput(v);
-    latestTitleRef.current = v;
     if (!canEditMeta) return;
     if (titleSaveTimer.current) window.clearTimeout(titleSaveTimer.current);
     titleSaveTimer.current = window.setTimeout(() => {
@@ -198,81 +245,42 @@ export function PageDetailPage() {
     void saveTitleNow(titleInput);
   };
 
-  // ----- Body autosave -----------------------------------------------------
-  const saveBodyNow = useCallback(async () => {
-    if (!workspaceSlug || !page) return;
-    const html = editorRef.current?.getHtml() ?? '';
-    if (html === lastSavedHtml.current) return;
-    const seq = ++bodySaveSeq.current;
-    setBodyStatus({ kind: 'saving' });
-    try {
-      const updated = await pageService.updateContent(workspaceSlug, page.id, html);
-      if (seq < bodyAppliedSeq.current) return;
-      bodyAppliedSeq.current = seq;
-      lastSavedHtml.current = html;
-      setPage(updated);
-      setBodyStatus({ kind: 'saved', at: Date.now() });
-    } catch (err) {
-      if (seq < bodyAppliedSeq.current) return;
-      bodyAppliedSeq.current = seq;
-      setBodyStatus({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Save failed',
-      });
+  const onTitleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      editor?.commands.focus('end');
     }
-  }, [workspaceSlug, page]);
+  };
 
-  // The editor doesn't currently expose an onChange callback, so we install a
-  // light keystroke listener on the wrapper to schedule autosaves.
-  const editorWrapperRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const node = editorWrapperRef.current;
-    if (!node || !canEditContent) return;
-    const onInput = () => {
-      if (bodySaveTimer.current) window.clearTimeout(bodySaveTimer.current);
-      bodySaveTimer.current = window.setTimeout(() => {
-        void saveBodyNow();
-      }, AUTOSAVE_DEBOUNCE_MS);
-    };
-    node.addEventListener('input', onInput);
-    return () => node.removeEventListener('input', onInput);
-  }, [canEditContent, saveBodyNow]);
-
-  // Flush pending autosaves on unmount/navigation. We can't await async work
-  // in a cleanup callback, so we fire-and-forget the requests; they complete
-  // in the background using whatever credentials the cookie session still has.
+  // Save on unmount/navigation if there are unsaved changes.
   useEffect(() => {
     return () => {
-      const slug = latestSlugRef.current;
-      const pid = latestPageIdRef.current;
-      if (titleSaveTimer.current) {
-        window.clearTimeout(titleSaveTimer.current);
-        titleSaveTimer.current = null;
-        if (slug && pid && latestTitleRef.current.trim()) {
-          void pageService.update(slug, pid, { name: latestTitleRef.current.trim() }).catch(() => {
-            // Best-effort: nothing to surface — the user is leaving anyway.
-          });
-        }
-      }
       if (bodySaveTimer.current) {
         window.clearTimeout(bodySaveTimer.current);
         bodySaveTimer.current = null;
-        // editorRef is mounted once for the lifetime of this component, so
-        // reading .current in cleanup is safe even though the lint rule warns.
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- editor ref lifetime matches component lifetime
-        const html = editorRef.current?.getHtml();
-        if (slug && pid && html != null && html !== lastSavedHtml.current) {
-          void pageService.updateContent(slug, pid, html).catch(() => {
-            // Best-effort.
-          });
-        }
+      }
+      if (titleSaveTimer.current) {
+        window.clearTimeout(titleSaveTimer.current);
+        titleSaveTimer.current = null;
       }
     };
   }, []);
 
+  // Click outside the options dropdown closes it.
+  useEffect(() => {
+    if (!optionsOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
+        setOptionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [optionsOpen]);
+
   // ----- Sub-pages panel ---------------------------------------------------
   useEffect(() => {
-    if (!showSubpages || !workspaceSlug || !page) return;
+    if (sidePanel !== 'subpages' || !workspaceSlug || !page) return;
     let cancelled = false;
     pageService
       .listChildren(workspaceSlug, page.id)
@@ -285,7 +293,7 @@ export function PageDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [showSubpages, workspaceSlug, page]);
+  }, [sidePanel, workspaceSlug, page]);
 
   const refreshChildren = useCallback(async () => {
     if (!workspaceSlug || !page) return;
@@ -313,6 +321,9 @@ export function PageDetailPage() {
   };
 
   // ----- Versions panel ----------------------------------------------------
+  // Loaded on demand from the panel-switch handler — keeping it out of an
+  // effect avoids the react-hooks/set-state-in-effect lint rule and matches
+  // Plane's user-initiated history load.
   const loadVersions = useCallback(async () => {
     if (!workspaceSlug || !page) return;
     try {
@@ -323,12 +334,15 @@ export function PageDetailPage() {
     }
   }, [workspaceSlug, page]);
 
-  useEffect(() => {
-    if (showVersions && versions === null) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: lazy-load versions when the panel first opens
-      void loadVersions();
-    }
-  }, [showVersions, versions, loadVersions]);
+  const switchSidePanelTo = useCallback(
+    (next: SidePanel) => {
+      setSidePanel(next);
+      if (next === 'versions' && versions === null) {
+        void loadVersions();
+      }
+    },
+    [versions, loadVersions],
+  );
 
   const onRestoreVersion = async (versionId: string) => {
     if (!workspaceSlug || !page) return;
@@ -336,12 +350,11 @@ export function PageDetailPage() {
       const updated = await pageService.restoreVersion(workspaceSlug, page.id, versionId);
       setPage(updated);
       lastSavedHtml.current = updated.description_html ?? '<p></p>';
-      editorRef.current?.setHtml(updated.description_html ?? '');
+      editor?.commands.setContent(updated.description_html ?? '', { emitUpdate: false });
       setBodyStatus({ kind: 'saved', at: Date.now() });
       setPreviewVersion(null);
       void loadVersions();
     } catch {
-      // surface as error pill
       setBodyStatus({ kind: 'error', message: 'Restore failed' });
     }
   };
@@ -373,6 +386,7 @@ export function PageDetailPage() {
 
   const onToggleArchive = async () => {
     if (!workspaceSlug || !page) return;
+    setOptionsOpen(false);
     try {
       if (page.archived_at) await pageService.unarchive(workspaceSlug, page.id);
       else await pageService.archive(workspaceSlug, page.id);
@@ -385,6 +399,7 @@ export function PageDetailPage() {
 
   const onToggleAccess = async () => {
     if (!workspaceSlug || !page) return;
+    setOptionsOpen(false);
     const next = page.access === 0 ? 1 : 0;
     try {
       const updated = await pageService.update(workspaceSlug, page.id, { access: next });
@@ -396,6 +411,7 @@ export function PageDetailPage() {
 
   const onDuplicate = async () => {
     if (!workspaceSlug || !projectId || !page) return;
+    setOptionsOpen(false);
     try {
       const dup = await pageService.duplicate(workspaceSlug, page.id);
       navigate(`/${workspaceSlug}/projects/${projectId}/pages/${dup.id}`);
@@ -414,7 +430,48 @@ export function PageDetailPage() {
     }
   };
 
+  const onCopyLink = async () => {
+    if (!page) return;
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1500);
+    } catch {
+      // best-effort
+    }
+  };
+
+  // ----- Logo --------------------------------------------------------------
+  const logo = pageLogoFrom(page);
+  const onChangeLogo = useCallback(
+    async (next: PageLogo | null) => {
+      if (!workspaceSlug || !page || !canEditMeta) return;
+      // PageLogo is a discriminated union; the API type uses the looser
+      // Record<string, unknown> shape. Cast through unknown to satisfy both.
+      const nextAsRecord = (next ?? undefined) as unknown as Record<string, unknown> | undefined;
+      const optimistic = { ...page, logo_props: nextAsRecord };
+      setPage(optimistic);
+      try {
+        const updated = await pageService.update(workspaceSlug, page.id, {
+          logo_props: (next ?? null) as unknown as Record<string, unknown> | null,
+        });
+        setPage(updated);
+      } catch {
+        // revert on failure
+        setPage(page);
+      }
+    },
+    [workspaceSlug, page, canEditMeta],
+  );
+
   // ----- Render ------------------------------------------------------------
+  // `baseUrl` is computed after the page has loaded (post-early-returns).
+  // Other render locals (`canDelete`, `sidebarOpen`) are derived from props
+  // or memoized state and can be safely computed up here.
+  const canDelete = canEditMeta && isArchived;
+  const sidebarOpen = sidePanel !== 'closed';
+
   const statusPill = useMemo(() => {
     const compose = (text: string, tone: string) => (
       <span className={`text-xs ${tone}`}>{text}</span>
@@ -440,6 +497,134 @@ export function PageDetailPage() {
     return null;
   }, [titleStatus, bodyStatus]);
 
+  // Page breadcrumb chunk — just the page-name (and tiny emoji) suffix; the
+  // workspace/project portion is rendered by `PageDetailHeader` in PageHeader.
+  const headerBreadcrumb = page ? (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {logo?.emoji?.value ? (
+        <span className="text-base leading-none">{logo.emoji.value}</span>
+      ) : null}
+      <span className="truncate font-medium text-(--txt-primary)">
+        {page.name || 'Untitled'}
+      </span>
+      {statusPill ? <span className="ml-2 shrink-0">{statusPill}</span> : null}
+    </span>
+  ) : null;
+
+  // Page actions cluster (lock / link / favorite / more) — rendered into
+  // the global PageHeader via `useSetPageDetailHeader`. The side-panel
+  // toggle lives on the toolbar (Plane parity), not here.
+  const headerActions = page ? (
+    <>
+      {isArchived ? (
+        <span className="rounded border border-(--warning-300) bg-(--warning-50) px-1.5 py-0.5 text-[11px] font-medium text-(--warning-default)">
+          Archived
+        </span>
+      ) : null}
+      {canEditMeta ? (
+        <Tooltip content={isLocked ? 'Unlock page' : 'Lock page'}>
+          <button
+            type="button"
+            onClick={onToggleLock}
+            aria-label={isLocked ? 'Unlock page' : 'Lock page'}
+            className="grid size-7 place-items-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
+          >
+            {isLocked ? <Unlock size={14} /> : <Lock size={14} />}
+          </button>
+        </Tooltip>
+      ) : null}
+      <Tooltip content={linkCopied ? 'Copied!' : 'Copy link'}>
+        <button
+          type="button"
+          onClick={onCopyLink}
+          aria-label="Copy link"
+          className="grid size-7 place-items-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
+        >
+          <Link2 size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip content={isFavorite ? 'Unfavorite' : 'Favorite'}>
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-label={isFavorite ? 'Unfavorite' : 'Favorite'}
+          className="grid size-7 place-items-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
+        >
+          <Star size={14} className={isFavorite ? 'fill-amber-500 text-amber-500' : ''} />
+        </button>
+      </Tooltip>
+      <div ref={optionsRef} className="relative">
+        <Tooltip content="More options">
+          <button
+            type="button"
+            onClick={() => setOptionsOpen((v) => !v)}
+            aria-label="More options"
+            className="grid size-7 place-items-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </Tooltip>
+        {optionsOpen ? (
+          <div className="absolute top-full right-0 z-30 mt-1 w-48 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-raised)">
+            <button
+              type="button"
+              onClick={() => {
+                setOptionsOpen(false);
+                window.open(window.location.href, '_blank', 'noopener,noreferrer');
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+            >
+              <ExternalLink size={13} /> Open in new tab
+            </button>
+            <button
+              type="button"
+              onClick={() => void onDuplicate()}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+            >
+              <Copy size={13} /> Make a copy
+            </button>
+            {canEditMeta && !isArchived ? (
+              <button
+                type="button"
+                onClick={() => void onToggleAccess()}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+              >
+                <Lock size={13} /> {isPrivate ? 'Make public' : 'Make private'}
+              </button>
+            ) : null}
+            {canEditMeta ? (
+              <button
+                type="button"
+                onClick={() => void onToggleArchive()}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+              >
+                {isArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                {isArchived ? 'Restore' : 'Archive'}
+              </button>
+            ) : null}
+            {canDelete ? (
+              <>
+                <hr className="my-1 border-(--border-subtle)" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOptionsOpen(false);
+                    setConfirmingDelete(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-(--danger-default) hover:bg-(--danger-50)"
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </>
+  ) : null;
+
+  useSetPageDetailHeader({ breadcrumb: headerBreadcrumb, actions: headerActions });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-(--txt-tertiary)">
@@ -464,214 +649,187 @@ export function PageDetailPage() {
   }
 
   const baseUrl = `/${workspace.slug}/projects/${project.id}`;
-  const canDelete = canEditMeta && isArchived;
+  const panelToggle = (
+    <Tooltip content={sidebarOpen ? 'Hide side panel' : 'Show side panel'}>
+      <button
+        type="button"
+        onClick={() => switchSidePanelTo(sidebarOpen ? 'closed' : 'subpages')}
+        aria-label={sidebarOpen ? 'Hide side panel' : 'Show side panel'}
+        className="grid size-7 place-items-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
+      >
+        {sidebarOpen ? <PanelRightClose size={14} /> : <PanelRight size={14} />}
+      </button>
+    </Tooltip>
+  );
 
   return (
-    <div className="flex h-full min-h-0 w-full">
-      <main className="min-w-0 flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-(--border-subtle) bg-(--bg-canvas) px-(--padding-page) py-3">
-          <nav
-            aria-label="Breadcrumb"
-            className="flex min-w-0 items-center gap-1 text-sm text-(--txt-secondary)"
-          >
-            <Link
-              to={`${baseUrl}/pages`}
-              className="truncate no-underline hover:text-(--txt-primary)"
-            >
-              Pages
-            </Link>
-            <ChevronRight size={14} className="shrink-0 text-(--txt-tertiary)" />
-            <span className="truncate text-(--txt-primary)">{page.name || 'Untitled'}</span>
-            {statusPill ? <span className="ml-3 shrink-0">{statusPill}</span> : null}
-          </nav>
+    <div className="flex h-full min-h-0 w-full flex-col">
+      {/* The breadcrumb + actions cluster is rendered by `PageDetailHeader`
+       * (mounted via `useSetPageDetailHeader` above) into the global
+       * PageHeader bar — Plane parity: there is only one top header row. */}
 
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={onToggleFavorite}
-              title={isFavorite ? 'Unfavorite' : 'Favorite'}
-              className="inline-flex h-8 w-8 items-center justify-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
-            >
-              <Star
-                size={16}
-                className={isFavorite ? 'fill-(--brand-default) text-(--brand-default)' : ''}
-              />
-            </button>
-            {canEditMeta ? (
-              <button
-                type="button"
-                onClick={onToggleAccess}
-                title={isPrivate ? 'Make public' : 'Make private'}
-                className="inline-flex h-8 items-center justify-center gap-1 rounded px-2 text-xs text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
-              >
-                <Globe size={14} />
-                {isPrivate ? 'Private' : 'Public'}
-              </button>
-            ) : null}
-            {canEditMeta ? (
-              <button
-                type="button"
-                onClick={onToggleLock}
-                title={isLocked ? 'Unlock' : 'Lock'}
-                className="inline-flex h-8 w-8 items-center justify-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
-              >
-                {isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={onDuplicate}
-              title="Duplicate"
-              className="inline-flex h-8 w-8 items-center justify-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
-            >
-              <Copy size={16} />
-            </button>
-            {canEditMeta ? (
-              <button
-                type="button"
-                onClick={onToggleArchive}
-                title={isArchived ? 'Unarchive' : 'Archive'}
-                className="inline-flex h-8 w-8 items-center justify-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
-              >
-                {isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setShowVersions((v) => !v)}
-              title="Version history"
-              className={`inline-flex h-8 w-8 items-center justify-center rounded text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) ${showVersions ? 'bg-(--bg-layer-1)' : ''}`}
-            >
-              <History size={16} />
-            </button>
-            {canDelete ? (
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(true)}
-                title="Delete (archived only)"
-                className="inline-flex h-8 w-8 items-center justify-center rounded text-(--danger-default) hover:bg-(--danger-50)"
-              >
-                <Trash2 size={16} />
-              </button>
-            ) : null}
-          </div>
-        </header>
+      {/* Sticky toolbar — Plane's page-toolbar; panel toggle anchors right */}
+      {!editorReadOnly ? (
+        <PageEditorToolbar editor={editor} endSlot={panelToggle} />
+      ) : (
+        <div className="flex w-full justify-end border-b border-(--border-subtle) bg-(--bg-canvas) px-(--padding-page) py-2">
+          {panelToggle}
+        </div>
+      )}
 
-        <div className="mx-auto max-w-3xl px-(--padding-page) py-6">
+      <div className="flex min-h-0 flex-1">
+        {/* Main column */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+          {/* Notices */}
           {isArchived ? (
-            <div className="mb-4 rounded border border-(--warning-300) bg-(--warning-50) px-3 py-2 text-sm text-(--warning-default)">
-              This page is archived and read-only. Unarchive to edit.
+            <div className="mx-(--padding-page) mt-4 rounded border border-(--warning-300) bg-(--warning-50) px-3 py-2 text-sm text-(--warning-default)">
+              This page is archived and read-only. Restore it from the menu to edit.
             </div>
           ) : isLocked && !isOwner ? (
-            <div className="mb-4 rounded border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-secondary)">
+            <div className="mx-(--padding-page) mt-4 rounded border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-secondary)">
               The owner has locked this page. You can read but not edit.
             </div>
           ) : null}
 
-          <input
-            type="text"
-            value={titleInput}
-            disabled={!canEditMeta}
-            onChange={(e) => onTitleChange(e.target.value)}
-            onBlur={onTitleBlur}
-            placeholder="Untitled"
-            className="mb-4 w-full border-0 bg-transparent text-3xl font-semibold text-(--txt-primary) placeholder:text-(--txt-tertiary) focus:outline-none disabled:opacity-80"
-          />
-
-          <div ref={editorWrapperRef}>
-            <PageDescriptionEditor
-              ref={editorRef}
-              initialHtml={page.description_html ?? ''}
-              placeholder="Start writing…"
-              readOnly={editorReadOnly}
-              onSaveShortcut={() => void saveBodyNow()}
+          {/* Page header: logo + title */}
+          <div className="mx-auto w-full max-w-3xl px-(--padding-page) pt-8 pb-4">
+            <div className="mb-2 -ml-2">
+              <EmojiLogoPicker
+                value={logo}
+                disabled={!canEditMeta}
+                onChange={(next) => void onChangeLogo(next)}
+                size={36}
+              />
+            </div>
+            <textarea
+              value={titleInput}
+              disabled={!canEditMeta}
+              onChange={(e) => onTitleChange(e.target.value)}
+              onBlur={onTitleBlur}
+              onKeyDown={onTitleKeyDown}
+              placeholder="Untitled"
+              rows={1}
+              className="block w-full resize-none border-0 bg-transparent text-3xl leading-tight font-bold tracking-tight text-(--txt-primary) placeholder:text-(--txt-placeholder) focus:outline-none disabled:opacity-80"
             />
           </div>
-        </div>
-      </main>
 
-      {/* Right rail: sub-pages + versions */}
-      <aside className="hidden w-72 shrink-0 flex-col border-l border-(--border-subtle) bg-(--bg-surface-1) lg:flex">
-        <div className="flex shrink-0 items-center justify-between border-b border-(--border-subtle) px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setShowSubpages((v) => !v)}
-            className={`text-xs font-medium tracking-wide uppercase ${showSubpages ? 'text-(--txt-primary)' : 'text-(--txt-tertiary)'}`}
-          >
-            Sub-pages
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowVersions((v) => !v)}
-            className={`text-xs font-medium tracking-wide uppercase ${showVersions ? 'text-(--txt-primary)' : 'text-(--txt-tertiary)'}`}
-          >
-            Versions
-          </button>
-        </div>
-
-        {showSubpages ? (
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            <button
-              type="button"
-              disabled={!canEditMeta || isArchived}
-              onClick={onAddSubpage}
-              className="mb-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-(--border-subtle) px-2 py-1.5 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) disabled:opacity-50"
-            >
-              <Plus size={12} /> Add sub-page
-            </button>
-            {children === null ? (
-              <p className="px-2 py-3 text-xs text-(--txt-tertiary)">Loading…</p>
-            ) : children.length === 0 ? (
-              <p className="px-2 py-3 text-xs text-(--txt-tertiary)">No sub-pages.</p>
-            ) : (
-              <ul className="space-y-0.5">
-                {children.map((c) => (
-                  <li key={c.id}>
-                    <Link
-                      to={`${baseUrl}/pages/${c.id}`}
-                      onClick={() => {
-                        // Force-clear children cache so the new page's panel re-fetches.
-                        setChildren(null);
-                        void refreshChildren();
-                      }}
-                      className="block truncate rounded px-2 py-1.5 text-sm text-(--txt-primary) no-underline hover:bg-(--bg-layer-1-hover)"
-                    >
-                      {c.name || 'Untitled'}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+          {/* Editor body */}
+          <div className="mx-auto w-full max-w-3xl flex-1 px-(--padding-page) pb-32">
+            <PageEditorContent editor={editor} />
           </div>
-        ) : null}
+        </main>
 
-        {showVersions ? (
-          <div className="min-h-0 flex-1 overflow-y-auto border-t border-(--border-subtle) p-2">
-            {versions === null ? (
-              <p className="px-2 py-3 text-xs text-(--txt-tertiary)">Loading…</p>
-            ) : versions.length === 0 ? (
-              <p className="px-2 py-3 text-xs text-(--txt-tertiary)">No versions yet.</p>
+        {/* Right rail — sub-pages / versions */}
+        {sidebarOpen ? (
+          <aside className="hidden w-72 shrink-0 flex-col border-l border-(--border-subtle) bg-(--bg-surface-1) lg:flex">
+            <div className="flex shrink-0 items-center gap-1 border-b border-(--border-subtle) px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => switchSidePanelTo('subpages')}
+                className={cn(
+                  'flex-1 rounded px-2 py-1.5 text-left text-xs font-medium tracking-wide uppercase transition-colors',
+                  sidePanel === 'subpages'
+                    ? 'bg-(--bg-layer-1) text-(--txt-primary)'
+                    : 'text-(--txt-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)',
+                )}
+              >
+                Sub-pages
+              </button>
+              <button
+                type="button"
+                onClick={() => switchSidePanelTo('versions')}
+                className={cn(
+                  'flex-1 rounded px-2 py-1.5 text-left text-xs font-medium tracking-wide uppercase transition-colors',
+                  sidePanel === 'versions'
+                    ? 'bg-(--bg-layer-1) text-(--txt-primary)'
+                    : 'text-(--txt-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)',
+                )}
+              >
+                <History size={11} className="mr-1 inline-block" /> History
+              </button>
+            </div>
+
+            {sidePanel === 'subpages' ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                <button
+                  type="button"
+                  disabled={!canEditMeta || isArchived}
+                  onClick={() => void onAddSubpage()}
+                  className="mb-2 inline-flex w-full items-center justify-center gap-1 rounded border border-dashed border-(--border-subtle) px-2 py-1.5 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) disabled:opacity-50"
+                >
+                  <Plus size={12} /> Add sub-page
+                </button>
+                {children === null ? (
+                  <p className="px-2 py-3 text-xs text-(--txt-tertiary)">Loading…</p>
+                ) : children.length === 0 ? (
+                  <p className="px-2 py-3 text-xs text-(--txt-tertiary)">No sub-pages.</p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {children.map((c) => {
+                      const childLogo = pageLogoFrom(c);
+                      return (
+                        <li key={c.id}>
+                          <Link
+                            to={`${baseUrl}/pages/${c.id}`}
+                            onClick={() => {
+                              setChildren(null);
+                              void refreshChildren();
+                            }}
+                            className="flex items-center gap-2 truncate rounded px-2 py-1.5 text-sm text-(--txt-primary) no-underline hover:bg-(--bg-layer-1-hover)"
+                          >
+                            <span className="grid size-4 shrink-0 place-items-center text-(--txt-icon-tertiary)">
+                              {childLogo?.emoji?.value ? (
+                                <span className="text-sm leading-none">
+                                  {childLogo.emoji.value}
+                                </span>
+                              ) : (
+                                <FileText size={12} />
+                              )}
+                            </span>
+                            <span className="truncate">{c.name || 'Untitled'}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             ) : (
-              <ul className="space-y-0.5">
-                {versions.map((v) => (
-                  <li key={v.id}>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewVersion(v)}
-                      className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
-                    >
-                      <span className="block">{new Date(v.last_saved_at).toLocaleString()}</span>
-                      <span className="block truncate text-xs text-(--txt-tertiary)">
-                        {v.description_stripped?.slice(0, 60) || '(empty)'}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                {versions === null ? (
+                  <p className="px-2 py-3 text-xs text-(--txt-tertiary)">Loading…</p>
+                ) : versions.length === 0 ? (
+                  <p className="px-2 py-3 text-xs text-(--txt-tertiary)">No versions yet.</p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {versions.map((v) => (
+                      <li key={v.id}>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewVersion(v)}
+                          className="block w-full truncate rounded px-2 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+                        >
+                          <span className="block">
+                            {new Date(v.last_saved_at).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <span className="block truncate text-xs text-(--txt-tertiary)">
+                            {v.description_stripped?.slice(0, 60) || '(empty)'}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
-          </div>
+          </aside>
         ) : null}
-      </aside>
+      </div>
 
       {previewVersion ? (
         <Modal
