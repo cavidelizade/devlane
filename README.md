@@ -92,7 +92,7 @@ Contributions are welcome. Please open an issue for bugs or feature ideas, and r
 
 ## GitHub Trending
 
-[![GitHub Trending](https://github-trending-badge.vercel.app/api/badge?id=Devlaner/devlane&name=Devlane)](https://github.com/Devlaner/devlane)
+[![GitHub Trending](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Devlaner/devlane/main/github-trending.json)](https://github.com/trending)
 
 ## License
 
