@@ -41,9 +41,6 @@ jobs:
           owner_lc="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           echo "name=${REGISTRY}/${owner_lc}/devlane-api" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -71,7 +68,7 @@ jobs:
         with:
           context: ./api
           file: ./api/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -93,9 +90,6 @@ jobs:
         run: |
           owner_lc="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           echo "name=${REGISTRY}/${owner_lc}/devlane-ui" >> "$GITHUB_OUTPUT"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -124,13 +118,10 @@ jobs:
         with:
           context: ./ui
           file: ./ui/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # VITE_API_BASE_URL is intentionally left at its default (empty).
-          # Deployments fronting the API on a separate origin should rebuild
-          # with `--build-arg VITE_API_BASE_URL=https://api.example.com`.
           cache-from: type=gha,scope=devlane-ui
           cache-to: type=gha,scope=devlane-ui,mode=max
 
