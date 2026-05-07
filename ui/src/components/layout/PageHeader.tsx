@@ -808,6 +808,9 @@ function HomeHeader() {
           variant="ghost"
           size="sm"
           className="gap-1.5 text-[13px] font-medium text-(--txt-secondary)"
+          onClick={() =>
+            window.open('https://github.com/Devlaner/devlane', '_blank', 'noopener,noreferrer')
+          }
         >
           <IconGitHub />
           Star us on GitHub
