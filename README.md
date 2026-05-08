@@ -90,10 +90,6 @@ Contributions are welcome. Please open an issue for bugs or feature ideas, and r
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Devlaner/devlane&type=date&legend=top-left)](https://www.star-history.com/#Devlaner/devlane&type=date&legend=top-left)
 
-## GitHub Trending
-
-[![GitHub Trending](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Devlaner/devlane/main/github-trending.json)](https://github.com/trending) [![GitHub Stars](https://img.shields.io/github/stars/Devlaner/devlane?style=social)](https://github.com/Devlaner/devlane/stargazers)
-
 ## License
 
 This project is licensed under the **Devlane Software License**. It grants you broad use and modification rights (MIT-style) but does not allow selling the software or offering it as a hosted/subscription service to third parties. See [LICENSE](LICENSE) for the full text. This license is not OSI-approved open source.
