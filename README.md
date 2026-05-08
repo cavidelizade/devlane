@@ -92,7 +92,7 @@ Contributions are welcome. Please open an issue for bugs or feature ideas, and r
 
 ## GitHub Trending
 
-[![GitHub Trending](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Devlaner/devlane/main/github-trending.json)](https://github.com/trending)
+[![GitHub Trending](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Devlaner/devlane/main/github-trending.json)](https://github.com/trending) [![GitHub Stars](https://img.shields.io/github/stars/Devlaner/devlane?style=social)](https://github.com/Devlaner/devlane/stargazers)
 
 ## License
 

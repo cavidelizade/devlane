@@ -30,7 +30,7 @@ jobs:
           TRENDING_REPO_ID: Devlaner/devlane
           TRENDING_REPO_NAME: Devlane
         run: |
-          node -e "import fs from 'node:fs/promises'; import path from 'node:path'; \
+          node --input-type=module -e "import fs from 'node:fs/promises'; \
           const REPO_ID = process.env.TRENDING_REPO_ID; \
           const SINCE = ['daily','weekly','monthly']; \
           const OUT = 'github-trending.json'; \
@@ -77,6 +77,8 @@ jobs:
             echo "No changes to commit."
             exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add github-trending.json github-trending.status.json
-          git commit -m "chore(readme): update GitHub Trending badge"
+          git commit -m "chore(trending): update GitHub Trending badge JSON/status"
           git push
