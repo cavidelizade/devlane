@@ -1,5 +1,5 @@
 import { apiClient } from '../api/client';
-import type { IssueApiResponse, CreateIssueRequest } from '../api/types';
+import type { IssueActivityApiResponse, IssueApiResponse, CreateIssueRequest } from '../api/types';
 
 export interface ListIssuesParams {
   limit?: number;
@@ -57,7 +57,14 @@ export const issueService = {
     workspaceSlug: string,
     projectId: string,
     issueId: string,
-    payload: Partial<CreateIssueRequest & { state_id?: string | null; is_draft?: boolean }>,
+    payload: Partial<
+      CreateIssueRequest & {
+        state_id?: string | null;
+        is_draft?: boolean;
+        /** Alias accepted by the backend so callers can use either name. */
+        description_html?: string;
+      }
+    >,
   ): Promise<IssueApiResponse> {
     const { data } = await apiClient.patch<IssueApiResponse>(
       `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/`,
@@ -69,6 +76,38 @@ export const issueService = {
   async delete(workspaceSlug: string, projectId: string, issueId: string): Promise<void> {
     await apiClient.delete(
       `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/`,
+    );
+  },
+
+  /** GET .../issues/:pk/activities/ */
+  async listActivities(
+    workspaceSlug: string,
+    projectId: string,
+    issueId: string,
+  ): Promise<IssueActivityApiResponse[]> {
+    const { data } = await apiClient.get<IssueActivityApiResponse[]>(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/activities/`,
+    );
+    return data;
+  },
+
+  /** GET .../issues/:pk/subscribe/ — returns whether the current user follows this issue. */
+  async isSubscribed(workspaceSlug: string, projectId: string, issueId: string): Promise<boolean> {
+    const { data } = await apiClient.get<{ subscribed: boolean }>(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/subscribe/`,
+    );
+    return data.subscribed;
+  },
+
+  async subscribe(workspaceSlug: string, projectId: string, issueId: string): Promise<void> {
+    await apiClient.post(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/subscribe/`,
+    );
+  },
+
+  async unsubscribe(workspaceSlug: string, projectId: string, issueId: string): Promise<void> {
+    await apiClient.delete(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/subscribe/`,
     );
   },
 };

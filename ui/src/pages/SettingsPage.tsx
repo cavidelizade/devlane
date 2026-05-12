@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, Button, Avatar, Modal } from '../components/ui';
 import { CoverImageModal } from '../components/CoverImageModal';
+import { IntegrationsSection } from '../components/integrations/IntegrationsSection';
 import { UploadImageModal } from '../components/UploadImageModal';
 import { ProjectIconModal, ProjectIconDisplay } from '../components/ProjectIconModal';
 import { getImageUrl } from '../lib/utils';
@@ -68,7 +69,7 @@ const IconUsers = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
-const IconCreditCard = () => (
+const IconPlug = () => (
   <svg
     width="16"
     height="16"
@@ -80,8 +81,10 @@ const IconCreditCard = () => (
     strokeLinejoin="round"
     aria-hidden
   >
-    <rect width="20" height="14" x="2" y="5" rx="2" />
-    <line x1="2" y1="10" x2="22" y2="10" />
+    <path d="M9 2v6" />
+    <path d="M15 2v6" />
+    <path d="M6 8h12v4a6 6 0 1 1-12 0V8Z" />
+    <path d="M12 18v4" />
   </svg>
 );
 const IconUpload = () => (
@@ -637,7 +640,7 @@ const IconZap = () => (
     <path d="M4 14l6 6 4-10 6 2-6-6-4 10-6-2z" />
   </svg>
 );
-type WorkspaceSettingsSection = 'general' | 'members' | 'billing' | 'exports' | 'webhooks';
+type WorkspaceSettingsSection = 'general' | 'members' | 'integrations' | 'exports' | 'webhooks';
 type ProjectSettingsSection =
   | 'general'
   | 'members'
@@ -692,7 +695,7 @@ const WORKSPACE_SECTIONS: {
 }[] = [
   { id: 'general', label: 'General', icon: <IconGrid /> },
   { id: 'members', label: 'Members', icon: <IconUsers /> },
-  { id: 'billing', label: 'Billing & Plans', icon: <IconCreditCard /> },
+  { id: 'integrations', label: 'Integrations', icon: <IconPlug /> },
   { id: 'exports', label: 'Exports', icon: <IconUpload /> },
   { id: 'webhooks', label: 'Webhooks', icon: <IconWebhook /> },
 ];
@@ -948,6 +951,52 @@ export function SettingsPage() {
     { id: number; email: string; role: 'member' | 'admin' }[]
   >([{ id: 0, email: '', role: 'member' }]);
   const [inviting, setInviting] = useState(false);
+
+  const submitInviteModal = useCallback(async () => {
+    if (!workspaceSlug || inviting) return;
+    const rows = inviteRows
+      .map((r) => ({ email: r.email.trim(), role: r.role }))
+      .filter((r) => r.email.length > 0);
+    if (rows.length === 0) {
+      setInviteModalOpen(false);
+      setInviteTarget(null);
+      setInviteRows([{ id: 0, email: '', role: 'member' }]);
+      return;
+    }
+    setInviting(true);
+    try {
+      const roleNum = (r: { role: 'member' | 'admin' }) => (r.role === 'admin' ? 20 : 10);
+      if (inviteTarget === 'project' && selectedProjectId) {
+        await Promise.all(
+          rows.map((r) =>
+            projectService.createInvite(workspaceSlug, selectedProjectId, {
+              email: r.email,
+              role: roleNum(r),
+            }),
+          ),
+        );
+        const refreshed = await projectService.listInvites(workspaceSlug, selectedProjectId);
+        setProjectInvites(refreshed ?? []);
+      } else {
+        await Promise.all(
+          rows.map((r) =>
+            workspaceService.createInvite(workspaceSlug, {
+              email: r.email,
+              role: roleNum(r),
+            }),
+          ),
+        );
+        const refreshed = await workspaceService.listInvites(workspaceSlug);
+        setWorkspaceInvites(refreshed ?? []);
+      }
+      setInviteModalOpen(false);
+      setInviteTarget(null);
+      setInviteRows([{ id: 0, email: '', role: 'member' }]);
+    } finally {
+      setInviting(false);
+    }
+  }, [workspaceSlug, inviting, inviteRows, inviteTarget, selectedProjectId]);
+
   const [profileSaveLoading, setProfileSaveLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [preferencesSaveLoading, setPreferencesSaveLoading] = useState(false);
@@ -3619,14 +3668,8 @@ export function SettingsPage() {
             </div>
           )}
 
-          {!isAccountTab && !isProjectsTab && section === 'billing' && (
-            <Card variant="outlined">
-              <CardContent className="py-10 text-center">
-                <p className="text-sm text-(--txt-secondary)">
-                  Billing & Plans settings will be available when the API is connected.
-                </p>
-              </CardContent>
-            </Card>
+          {!isAccountTab && !isProjectsTab && section === 'integrations' && workspaceSlug && (
+            <IntegrationsSection workspaceSlug={workspaceSlug} projects={projects} />
           )}
 
           {!isAccountTab && !isProjectsTab && section === 'exports' && (
@@ -3878,116 +3921,87 @@ export function SettingsPage() {
             >
               Cancel
             </Button>
-            <Button
-              disabled={inviting}
-              onClick={async () => {
-                if (!workspaceSlug) return;
-                const rows = inviteRows
-                  .map((r) => ({ email: r.email.trim(), role: r.role }))
-                  .filter((r) => r.email.length > 0);
-                if (rows.length === 0) {
-                  setInviteModalOpen(false);
-                  setInviteTarget(null);
-                  setInviteRows([{ id: 0, email: '', role: 'member' }]);
-                  return;
-                }
-                setInviting(true);
-                try {
-                  const roleNum = (r: { role: 'member' | 'admin' }) =>
-                    r.role === 'admin' ? 20 : 10;
-                  if (inviteTarget === 'project' && selectedProjectId) {
-                    await Promise.all(
-                      rows.map((r) =>
-                        projectService.createInvite(workspaceSlug, selectedProjectId, {
-                          email: r.email,
-                          role: roleNum(r),
-                        }),
-                      ),
-                    );
-                    const refreshed = await projectService.listInvites(
-                      workspaceSlug,
-                      selectedProjectId,
-                    );
-                    setProjectInvites(refreshed ?? []);
-                  } else {
-                    await Promise.all(
-                      rows.map((r) =>
-                        workspaceService.createInvite(workspaceSlug, {
-                          email: r.email,
-                          role: roleNum(r),
-                        }),
-                      ),
-                    );
-                    const refreshed = await workspaceService.listInvites(workspaceSlug);
-                    setWorkspaceInvites(refreshed ?? []);
-                  }
-                  setInviteModalOpen(false);
-                  setInviteTarget(null);
-                  setInviteRows([{ id: 0, email: '', role: 'member' }]);
-                } finally {
-                  setInviting(false);
-                }
-              }}
-            >
+            <Button type="submit" form="invite-collaborators-form" disabled={inviting}>
               {inviting ? 'Sending…' : 'Send invitations'}
             </Button>
           </>
         }
       >
-        <p className="mb-4 text-sm text-(--txt-secondary)">
-          {inviteTarget === 'project'
-            ? 'Invite people to this project.'
-            : 'Invite people to collaborate on your workspace.'}
-        </p>
-        <div className="space-y-3">
-          {inviteRows.map((row) => (
-            <div key={row.id} className="flex flex-wrap items-center gap-2">
-              <input
-                type="email"
-                value={row.email}
-                onChange={(e) =>
-                  setInviteRows((prev) =>
-                    prev.map((r) => (r.id === row.id ? { ...r, email: e.target.value } : r)),
-                  )
-                }
-                placeholder="name@company.com"
-                className="min-w-[200px] flex-1 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) placeholder:text-(--txt-placeholder) focus:outline-none focus:border-(--border-strong)"
-              />
-              <div className="relative min-w-[100px]">
-                <select
-                  value={row.role}
+        <form
+          id="invite-collaborators-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submitInviteModal();
+          }}
+        >
+          <p className="mb-4 text-sm text-(--txt-secondary)">
+            {inviteTarget === 'project'
+              ? 'Invite people to this project.'
+              : 'Invite people to collaborate on your workspace.'}
+          </p>
+          <div className="space-y-3">
+            {inviteRows.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center gap-2">
+                <input
+                  type="email"
+                  value={row.email}
                   onChange={(e) =>
                     setInviteRows((prev) =>
-                      prev.map((r) =>
-                        r.id === row.id ? { ...r, role: e.target.value as 'member' | 'admin' } : r,
-                      ),
+                      prev.map((r) => (r.id === row.id ? { ...r, email: e.target.value } : r)),
                     )
                   }
-                  className="w-full appearance-none rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-2 pl-2.5 pr-7 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--txt-icon-tertiary)">
-                  <IconChevronDown />
-                </span>
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' || e.shiftKey) return;
+                    e.preventDefault();
+                    void submitInviteModal();
+                  }}
+                  placeholder="name@company.com"
+                  className="min-w-[200px] flex-1 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) placeholder:text-(--txt-placeholder) focus:outline-none focus:border-(--border-strong)"
+                />
+                <div className="relative min-w-[100px]">
+                  <select
+                    value={row.role}
+                    onChange={(e) =>
+                      setInviteRows((prev) =>
+                        prev.map((r) =>
+                          r.id === row.id
+                            ? { ...r, role: e.target.value as 'member' | 'admin' }
+                            : r,
+                        ),
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter' || e.shiftKey) return;
+                      if (!e.ctrlKey && !e.metaKey) return;
+                      e.preventDefault();
+                      void submitInviteModal();
+                    }}
+                    className="w-full appearance-none rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-2 pl-2.5 pr-7 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--txt-icon-tertiary)">
+                    <IconChevronDown />
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() =>
-              setInviteRows((prev) => [
-                ...prev,
-                { id: Date.now(), email: '', role: 'member' as const },
-              ])
-            }
-            className="flex items-center gap-1.5 text-sm font-medium text-(--txt-accent-primary) hover:underline"
-          >
-            <IconPlus />
-            Add more
-          </button>
-        </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setInviteRows((prev) => [
+                  ...prev,
+                  { id: Date.now(), email: '', role: 'member' as const },
+                ])
+              }
+              className="flex items-center gap-1.5 text-sm font-medium text-(--txt-accent-primary) hover:underline"
+            >
+              <IconPlus />
+              Add more
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* Project state (workflow) add/edit modal */}

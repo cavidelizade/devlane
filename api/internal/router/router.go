@@ -1,9 +1,11 @@
 package router
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/Devlaner/devlane/api/internal/auth"
+	gh "github.com/Devlaner/devlane/api/internal/github"
 	"github.com/Devlaner/devlane/api/internal/handler"
 	"github.com/Devlaner/devlane/api/internal/middleware"
 	"github.com/Devlaner/devlane/api/internal/minio"
@@ -65,6 +67,7 @@ func New(cfg Config) *gin.Engine {
 	issueViewStore := store.NewIssueViewStore(cfg.DB)
 	pageStore := store.NewPageStore(cfg.DB)
 	notificationStore := store.NewNotificationStore(cfg.DB)
+	issueSubscriberStore := store.NewIssueSubscriberStore(cfg.DB)
 	commentStore := store.NewCommentStore(cfg.DB)
 	instanceSettingStore := store.NewInstanceSettingStore(cfg.DB)
 	workspaceUserLinkStore := store.NewWorkspaceUserLinkStore(cfg.DB)
@@ -73,6 +76,14 @@ func New(cfg Config) *gin.Engine {
 	userNotifPrefStore := store.NewUserNotificationPreferenceStore(cfg.DB)
 	apiTokenStore := store.NewApiTokenStore(cfg.DB)
 	userFavoriteStore := store.NewUserFavoriteStore(cfg.DB)
+
+	// Integration stores
+	integrationStore := store.NewIntegrationStore(cfg.DB)
+	workspaceIntegrationStore := store.NewWorkspaceIntegrationStore(cfg.DB)
+	githubRepoStore := store.NewGithubRepositoryStore(cfg.DB)
+	githubRepoSyncStore := store.NewGithubRepositorySyncStore(cfg.DB)
+	githubIssueSyncStore := store.NewGithubIssueSyncStore(cfg.DB)
+	githubWebhookEventStore := store.NewGithubWebhookEventStore(cfg.DB)
 
 	// Password reset tokens
 	passwordResetTokenStore := store.NewPasswordResetTokenStore(cfg.DB)
@@ -117,16 +128,71 @@ func New(cfg Config) *gin.Engine {
 	projectSvc := service.NewProjectService(projectStore, projectInviteStore, workspaceStore, userStore)
 	stateSvc := service.NewStateService(stateStore, projectStore, workspaceStore)
 	labelSvc := service.NewLabelService(labelStore, projectStore, workspaceStore)
+	issueActivityStore := store.NewIssueActivityStore(cfg.DB)
 	issueSvc := service.NewIssueService(issueStore, projectStore, workspaceStore)
+	issueSvc.SetActivityStore(issueActivityStore)
 	cycleSvc := service.NewCycleService(cycleStore, projectStore, workspaceStore)
 	moduleSvc := service.NewModuleService(moduleStore, projectStore, workspaceStore)
 	issueViewSvc := service.NewIssueViewService(issueViewStore, projectStore, workspaceStore, userFavoriteStore)
 	pageSvc := service.NewPageService(pageStore, projectStore, workspaceStore)
-	notificationSvc := service.NewNotificationService(notificationStore, workspaceStore)
+	pageSvc.SetFavoriteStore(userFavoriteStore)
+	notificationSvc := service.NewNotificationService(notificationStore, workspaceStore, issueStore, projectStore, userStore, stateStore)
+	notificationSvc.SetLogger(cfg.Log)
+	notificationSvc.SetSubscriberStore(issueSubscriberStore)
+	notificationSvc.SetPreferenceStore(userNotifPrefStore)
+	issueSvc.SetNotificationService(notificationSvc)
+	issueSvc.SetSubscriberStore(issueSubscriberStore)
+	commentReactionStore := store.NewCommentReactionStore(cfg.DB)
 	commentSvc := service.NewCommentService(commentStore, issueStore, projectStore, workspaceStore)
+	commentSvc.SetReactionStore(commentReactionStore)
+	commentSvc.SetNotificationService(notificationSvc)
+	commentSvc.SetSubscriberStore(issueSubscriberStore)
 	workspaceLinkSvc := service.NewWorkspaceLinkService(workspaceUserLinkStore, workspaceStore)
 	stickySvc := service.NewStickyService(stickyStore, workspaceStore)
 	recentVisitSvc := service.NewRecentVisitService(userRecentVisitStore, workspaceStore, issueStore, projectStore, pageStore)
+
+	// GitHub App: build the AppAuth + Client lazily from instance_settings.
+	// Failure here is non-fatal — endpoints that need it return 503 until
+	// the admin configures github_app.
+	var githubClient *gh.Client
+	if appAuth, err := service.LoadGitHubAppFromSettings(context.Background(), instanceSettingStore); err == nil && appAuth != nil {
+		githubClient = gh.NewClient(appAuth, nil)
+	} else if err != nil && cfg.Log != nil {
+		cfg.Log.Warn("github app not configured", "error", err)
+	}
+
+	integrationSvc := service.NewIntegrationService(
+		integrationStore, workspaceIntegrationStore, workspaceStore, instanceSettingStore, githubClient,
+	)
+	githubSyncSvc := service.NewGithubSyncService(
+		integrationSvc, workspaceIntegrationStore, githubRepoStore, githubRepoSyncStore,
+		githubIssueSyncStore, issueStore, workspaceStore, projectStore,
+	)
+	githubEventSvc := service.NewGithubEventService(
+		cfg.Log, workspaceIntegrationStore, githubRepoStore, githubRepoSyncStore, integrationStore,
+		githubIssueSyncStore, githubWebhookEventStore, workspaceStore, projectStore, issueStore, stateStore,
+		commentStore, integrationSvc,
+	)
+	integrationHandler := &handler.IntegrationHandler{
+		Integration:  integrationSvc,
+		GithubSync:   githubSyncSvc,
+		GithubEvent:  githubEventSvc,
+		Settings:     instanceSettingStore,
+		AppBaseURL:   appBaseURL,
+		APIPublicURL: cfg.APIPublicURL,
+		Log:          cfg.Log,
+	}
+
+	// Hot-reload integration clients when an admin saves new credentials so
+	// the new App auth takes effect without restarting the API.
+	instanceSettingsHandler.OnSectionUpdated = func(ctx context.Context, key string) {
+		if key != "github_app" {
+			return
+		}
+		if err := integrationSvc.ReloadGitHubClient(ctx); err != nil && cfg.Log != nil {
+			cfg.Log.Warn("github app reload after settings update failed", "error", err)
+		}
+	}
 
 	// Handlers
 	workspaceHandler := &handler.WorkspaceHandler{
@@ -233,6 +299,10 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/", issueHandler.AddAssignee)
 		api.PUT("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/", issueHandler.ReplaceAssignees)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/:assigneeId/", issueHandler.RemoveAssignee)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/activities/", issueHandler.ListActivities)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.IsSubscribed)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.Subscribe)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.Unsubscribe)
 
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.Create)
@@ -268,13 +338,32 @@ func New(cfg Config) *gin.Engine {
 
 		api.GET("/workspaces/:slug/pages/", pageHandler.List)
 		api.POST("/workspaces/:slug/pages/", pageHandler.Create)
+		api.GET("/workspaces/:slug/pages/favorites/", pageHandler.ListFavorites)
 		api.GET("/workspaces/:slug/pages/:pageId/", pageHandler.Get)
-		api.PATCH("/workspaces/:slug/pages/:pageId/", pageHandler.Update)
+		api.PATCH("/workspaces/:slug/pages/:pageId/", pageHandler.UpdateMeta)
 		api.DELETE("/workspaces/:slug/pages/:pageId/", pageHandler.Delete)
+		api.GET("/workspaces/:slug/pages/:pageId/children/", pageHandler.ListChildren)
+		api.PATCH("/workspaces/:slug/pages/:pageId/content/", pageHandler.UpdateContent)
+		api.POST("/workspaces/:slug/pages/:pageId/lock/", pageHandler.Lock)
+		api.DELETE("/workspaces/:slug/pages/:pageId/lock/", pageHandler.Unlock)
+		api.POST("/workspaces/:slug/pages/:pageId/archive/", pageHandler.Archive)
+		api.DELETE("/workspaces/:slug/pages/:pageId/archive/", pageHandler.Unarchive)
+		api.POST("/workspaces/:slug/pages/:pageId/duplicate/", pageHandler.Duplicate)
+		api.GET("/workspaces/:slug/pages/:pageId/versions/", pageHandler.ListVersions)
+		api.GET("/workspaces/:slug/pages/:pageId/versions/:versionId/", pageHandler.GetVersion)
+		api.POST("/workspaces/:slug/pages/:pageId/versions/:versionId/restore/", pageHandler.RestoreVersion)
+		api.POST("/workspaces/:slug/pages/:pageId/favorite/", pageHandler.AddFavorite)
+		api.DELETE("/workspaces/:slug/pages/:pageId/favorite/", pageHandler.RemoveFavorite)
 
 		api.GET("/workspaces/:slug/notifications/", notificationHandler.List)
+		api.GET("/workspaces/:slug/notifications/unread-count/", notificationHandler.UnreadCount)
 		api.POST("/workspaces/:slug/notifications/mark-all-read/", notificationHandler.MarkAllRead)
 		api.POST("/workspaces/:slug/notifications/:id/read/", notificationHandler.MarkRead)
+		api.DELETE("/workspaces/:slug/notifications/:id/read/", notificationHandler.MarkUnread)
+		api.POST("/workspaces/:slug/notifications/:id/archive/", notificationHandler.Archive)
+		api.DELETE("/workspaces/:slug/notifications/:id/archive/", notificationHandler.Unarchive)
+		api.POST("/workspaces/:slug/notifications/:id/snooze/", notificationHandler.Snooze)
+		api.DELETE("/workspaces/:slug/notifications/:id/snooze/", notificationHandler.Unsnooze)
 
 		api.GET("/workspaces/:slug/quick-links/", workspaceLinkHandler.List)
 		api.POST("/workspaces/:slug/quick-links/", workspaceLinkHandler.Create)
@@ -293,6 +382,33 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/comments/", commentHandler.Create)
 		api.PATCH("/workspaces/:slug/projects/:projectId/issues/:pk/comments/:commentId/", commentHandler.Update)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/comments/:commentId/", commentHandler.Delete)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/comments/:commentId/reactions/", commentHandler.ListReactions)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/comments/:commentId/reactions/", commentHandler.AddReaction)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/comments/:commentId/reactions/:reaction/", commentHandler.RemoveReaction)
+
+		// Integrations (workspace-level)
+		api.GET("/integrations/", integrationHandler.ListAvailable)
+		api.GET("/workspaces/:slug/integrations/", integrationHandler.ListInstalled)
+		api.DELETE("/workspaces/:slug/integrations/:provider/", integrationHandler.Uninstall)
+
+		// GitHub-specific (workspace-level): list installation repos.
+		api.GET("/workspaces/:slug/integrations/github/repositories/", integrationHandler.GitHubListRepositories)
+
+		// GitHub repo sync (project-scoped).
+		api.GET("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubGetSync)
+		api.POST("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubCreateSync)
+		api.PATCH("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubUpdateSync)
+		api.DELETE("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubDeleteSync)
+
+		// GitHub PR ↔ issue links (per-issue, for the issue detail sidebar).
+		// :pk is the issue id (matches the existing /issues/:pk/ routes — Gin
+		// requires the same param name at the same path position).
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/integrations/github/links/", integrationHandler.GitHubListIssueLinks)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/integrations/github/links/", integrationHandler.GitHubCreateIssueLink)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/integrations/github/links/:linkId/", integrationHandler.GitHubDeleteIssueLink)
+
+		// Bulk PR summary for the issues list page badges.
+		api.GET("/workspaces/:slug/projects/:projectId/integrations/github/issue-summary/", integrationHandler.GitHubIssueSummary)
 	}
 
 	// Auth routes (no auth required)
@@ -322,6 +438,16 @@ func New(cfg Config) *gin.Engine {
 	}
 	authGroup.GET("/:provider/", oauthHandler.Initiate)
 	authGroup.GET("/:provider/callback/", oauthHandler.Callback)
+
+	// GitHub App install flow (separate from OAuth user sign-in). Both
+	// require the user to be signed in so we can attach the installation to
+	// their workspace.
+	r.GET("/auth/github-app/install", middleware.RequireAuth(authSvc, cfg.Log), integrationHandler.GitHubInstallStart)
+	r.GET("/auth/github-app/callback", middleware.RequireAuth(authSvc, cfg.Log), integrationHandler.GitHubInstallCallback)
+
+	// GitHub webhook receiver — public; HMAC-signature-verified.
+	r.POST("/webhooks/github", integrationHandler.GitHubWebhook)
+	r.POST("/webhooks/github/", integrationHandler.GitHubWebhook)
 
 	// Legacy /api/v1
 	v1 := r.Group("/api/v1")

@@ -80,6 +80,9 @@ const BoardPage = lazy(() =>
 const CyclesPage = lazy(() =>
   import('../pages/CyclesPage').then((m) => page({ CyclesPage: m.CyclesPage })),
 );
+const CycleDetailPage = lazy(() =>
+  import('../pages/CycleDetailPage').then((m) => page({ CycleDetailPage: m.CycleDetailPage })),
+);
 const ModulesPage = lazy(() =>
   import('../pages/ModulesPage').then((m) => page({ ModulesPage: m.ModulesPage })),
 );
@@ -97,6 +100,9 @@ const ViewDetailPage = lazy(() =>
 );
 const PagesPage = lazy(() =>
   import('../pages/PagesPage').then((m) => page({ PagesPage: m.PagesPage })),
+);
+const PageDetailPage = lazy(() =>
+  import('../pages/PageDetailPage').then((m) => page({ PageDetailPage: m.PageDetailPage })),
 );
 
 const InstanceAdminGeneralPage = lazy(() =>
@@ -151,6 +157,16 @@ const InstanceAdminCreateWorkspacePage = lazy(() =>
     page({
       InstanceAdminCreateWorkspacePage: m.InstanceAdminCreateWorkspacePage,
     }),
+  ),
+);
+const InstanceAdminIntegrationsPage = lazy(() =>
+  import('../pages/instance-admin').then((m) =>
+    page({ InstanceAdminIntegrationsPage: m.InstanceAdminIntegrationsPage }),
+  ),
+);
+const InstanceAdminIntegrationGitHubPage = lazy(() =>
+  import('../pages/instance-admin').then((m) =>
+    page({ InstanceAdminIntegrationGitHubPage: m.InstanceAdminIntegrationGitHubPage }),
   ),
 );
 // Reserved for future instance-admin login route:
@@ -343,6 +359,22 @@ const router = createBrowserRouter([
               </Suspense>
             ),
           },
+          {
+            path: 'integrations',
+            element: (
+              <Suspense fallback={<PageFallback />}>
+                <InstanceAdminIntegrationsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'integrations/github',
+            element: (
+              <Suspense fallback={<PageFallback />}>
+                <InstanceAdminIntegrationGitHubPage />
+              </Suspense>
+            ),
+          },
         ],
       },
       {
@@ -497,6 +529,14 @@ const router = createBrowserRouter([
                         ),
                       },
                       {
+                        path: 'cycles/:cycleId',
+                        element: (
+                          <Suspense fallback={<PageFallback />}>
+                            <CycleDetailPage />
+                          </Suspense>
+                        ),
+                      },
+                      {
                         path: 'modules',
                         element: (
                           <Suspense fallback={<PageFallback />}>
@@ -533,6 +573,14 @@ const router = createBrowserRouter([
                         element: (
                           <Suspense fallback={<PageFallback />}>
                             <PagesPage />
+                          </Suspense>
+                        ),
+                      },
+                      {
+                        path: 'pages/:pageId',
+                        element: (
+                          <Suspense fallback={<PageFallback />}>
+                            <PageDetailPage />
                           </Suspense>
                         ),
                       },
