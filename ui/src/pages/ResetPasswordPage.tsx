@@ -60,7 +60,6 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
-  const uidb64 = searchParams.get('uidb64') ?? '';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -70,8 +69,7 @@ export function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Both uidb64 and token must be present — the email link includes both
-  const invalidToken = !token || !uidb64;
+  const invalidToken = !token;
 
   const passwordsMatch = useMemo(
     () => confirmPassword.length > 0 && password === confirmPassword,
@@ -94,7 +92,7 @@ export function ResetPasswordPage() {
 
       setIsSubmitting(true);
       try {
-        await authService.resetPassword({ uidb64, token, new_password: password });
+        await authService.resetPassword({ token, new_password: password });
         setSuccess(true);
       } catch (err: unknown) {
         setError(getApiErrorMessage(err));
@@ -102,7 +100,7 @@ export function ResetPasswordPage() {
         setIsSubmitting(false);
       }
     },
-    [uidb64, token, password, passwordsMatch],
+    [token, password, passwordsMatch],
   );
 
   if (invalidToken) {

@@ -318,9 +318,6 @@ export interface ForgotPasswordRequest {
 
 /** POST /auth/reset-password/ request */
 export interface ResetPasswordRequest {
-  /** base64-encoded user id, from the ?uidb64= query param in the reset email link */
-  uidb64: string;
-  /** Django PasswordResetTokenGenerator token, from ?token= in the reset email link */
   token: string;
   new_password: string;
 }
