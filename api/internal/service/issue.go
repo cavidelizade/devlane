@@ -597,3 +597,109 @@ func (s *IssueService) ListActivities(ctx context.Context, workspaceSlug string,
 	}
 	return s.activity.ListByIssueID(ctx, issueID)
 }
+
+// ListRelations returns the issue's relations grouped by type.
+// The frontend expects { blocking: Issue[], blocked_by: Issue[], duplicate: Issue[], relates_to: Issue[] }.
+func (s *IssueService) ListRelations(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID) (map[string][]model.Issue, error) {
+	if err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
+		return nil, err
+	}
+	rows, err := s.is.ListRelationsForIssue(ctx, issueID)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string][]model.Issue{
+		"blocking":   {},
+		"blocked_by": {},
+		"duplicate":  {},
+		"relates_to": {},
+	}
+	for _, row := range rows {
+		issue, err := s.is.GetByID(ctx, row.RelatedIssueID)
+		if err != nil {
+			continue
+		}
+		if ids, err := s.is.ListAssigneesForIssue(ctx, issue.ID); err == nil {
+			issue.AssigneeIDs = ids
+		}
+		if ids, err := s.is.ListLabelsForIssue(ctx, issue.ID); err == nil {
+			issue.LabelIDs = ids
+		}
+		if ids, err := s.is.ListCycleIDsForIssue(ctx, issue.ID); err == nil {
+			issue.CycleIDs = ids
+		}
+		if ids, err := s.is.ListModuleIDsForIssue(ctx, issue.ID); err == nil {
+			issue.ModuleIDs = ids
+		}
+		result[row.RelationType] = append(result[row.RelationType], *issue)
+	}
+	return result, nil
+}
+
+// CreateRelations adds one or more relations from issueID toward each issue in relatedIssueIDs.
+// Both the forward and reverse rows are inserted (skipping pairs that already exist).
+// Returns the newly related issues (forward direction only, for the frontend response).
+func (s *IssueService) CreateRelations(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, relationType string, relatedIssueIDs []uuid.UUID) ([]model.Issue, error) {
+	issue, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID)
+	if err != nil {
+		return nil, err
+	}
+	reverseType := model.ReverseRelationType(relationType)
+	var added []model.Issue
+	for _, relID := range relatedIssueIDs {
+		exists, _ := s.is.RelationExists(ctx, issueID, relID, relationType)
+		if exists {
+			continue
+		}
+		forward := &model.IssueRelation{
+			IssueID:        issueID,
+			RelatedIssueID: relID,
+			RelationType:   relationType,
+			ProjectID:      issue.ProjectID,
+			WorkspaceID:    issue.WorkspaceID,
+			CreatedByID:    &userID,
+		}
+		if err := s.is.CreateRelation(ctx, forward); err != nil {
+			return nil, err
+		}
+		// Reverse row so the other issue also sees this relation.
+		reverse := &model.IssueRelation{
+			IssueID:        relID,
+			RelatedIssueID: issueID,
+			RelationType:   reverseType,
+			ProjectID:      issue.ProjectID,
+			WorkspaceID:    issue.WorkspaceID,
+			CreatedByID:    &userID,
+		}
+		_ = s.is.CreateRelation(ctx, reverse) // best-effort; forward row is the canonical one
+		relIssue, err := s.is.GetByID(ctx, relID)
+		if err == nil {
+			if ids, err := s.is.ListAssigneesForIssue(ctx, relIssue.ID); err == nil {
+				relIssue.AssigneeIDs = ids
+			}
+			if ids, err := s.is.ListLabelsForIssue(ctx, relIssue.ID); err == nil {
+				relIssue.LabelIDs = ids
+			}
+			if ids, err := s.is.ListCycleIDsForIssue(ctx, relIssue.ID); err == nil {
+				relIssue.CycleIDs = ids
+			}
+			if ids, err := s.is.ListModuleIDsForIssue(ctx, relIssue.ID); err == nil {
+				relIssue.ModuleIDs = ids
+			}
+			added = append(added, *relIssue)
+		}
+		s.recordActivity(ctx, issue, userID, "relation_added", "", relationType+":"+relID.String())
+	}
+	return added, nil
+}
+
+// RemoveRelation deletes both the forward and reverse relation rows.
+func (s *IssueService) RemoveRelation(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, relationType string, relatedIssueID uuid.UUID) error {
+	if err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
+		return err
+	}
+	_ = s.is.DeleteRelation(ctx, issueID, relatedIssueID, relationType)
+	reverseType := model.ReverseRelationType(relationType)
+	_ = s.is.DeleteRelation(ctx, relatedIssueID, issueID, reverseType)
+	return nil
+}
