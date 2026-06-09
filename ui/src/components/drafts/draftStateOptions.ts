@@ -5,14 +5,14 @@ const DRAFT_STATE_ORDER: Array<{ group: string; label: string }> = [
   { group: 'unstarted', label: 'Todo' },
   { group: 'started', label: 'In Progress' },
   { group: 'completed', label: 'Done' },
-  { group: 'cancelled', label: 'Cancelled' },
+  { group: 'canceled', label: 'Cancelled' },
 ];
 
 export type DraftStateOption = { group: string; label: string; id: string | null };
 
 function normalizeStateGroup(group: string | undefined): string {
   const g = (group ?? '').toLowerCase();
-  if (g === 'canceled') return 'cancelled';
+  if (g === 'cancelled') return 'canceled';
   return g;
 }
 

@@ -71,7 +71,7 @@ var defaultProjectStates = []struct {
 	{name: "Todo", color: "#60646C", sequence: 25000, group: "unstarted"},
 	{name: "In Progress", color: "#F59E0B", sequence: 35000, group: "started"},
 	{name: "Done", color: "#46A758", sequence: 45000, group: "completed"},
-	{name: "Cancelled", color: "#9AA4BC", sequence: 55000, group: "cancelled"},
+	{name: "Cancelled", color: "#9AA4BC", sequence: 55000, group: "canceled"},
 }
 
 func (s *StateService) ensureDefaultStates(ctx context.Context, projectID, workspaceID uuid.UUID) error {
