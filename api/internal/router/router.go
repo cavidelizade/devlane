@@ -67,6 +67,7 @@ func New(cfg Config) *gin.Engine {
 	issueViewStore := store.NewIssueViewStore(cfg.DB)
 	pageStore := store.NewPageStore(cfg.DB)
 	notificationStore := store.NewNotificationStore(cfg.DB)
+	issueSubscriberStore := store.NewIssueSubscriberStore(cfg.DB)
 	commentStore := store.NewCommentStore(cfg.DB)
 	instanceSettingStore := store.NewInstanceSettingStore(cfg.DB)
 	workspaceUserLinkStore := store.NewWorkspaceUserLinkStore(cfg.DB)
@@ -130,14 +131,23 @@ func New(cfg Config) *gin.Engine {
 	issueActivityStore := store.NewIssueActivityStore(cfg.DB)
 	issueSvc := service.NewIssueService(issueStore, projectStore, workspaceStore)
 	issueSvc.SetActivityStore(issueActivityStore)
+	attachmentSvc := service.NewAttachmentService(issueStore, projectStore, workspaceStore, cfg.Minio)
 	cycleSvc := service.NewCycleService(cycleStore, projectStore, workspaceStore)
 	moduleSvc := service.NewModuleService(moduleStore, projectStore, workspaceStore)
 	issueViewSvc := service.NewIssueViewService(issueViewStore, projectStore, workspaceStore, userFavoriteStore)
 	pageSvc := service.NewPageService(pageStore, projectStore, workspaceStore)
-	notificationSvc := service.NewNotificationService(notificationStore, workspaceStore)
+	pageSvc.SetFavoriteStore(userFavoriteStore)
+	notificationSvc := service.NewNotificationService(notificationStore, workspaceStore, issueStore, projectStore, userStore, stateStore)
+	notificationSvc.SetLogger(cfg.Log)
+	notificationSvc.SetSubscriberStore(issueSubscriberStore)
+	notificationSvc.SetPreferenceStore(userNotifPrefStore)
+	issueSvc.SetNotificationService(notificationSvc)
+	issueSvc.SetSubscriberStore(issueSubscriberStore)
 	commentReactionStore := store.NewCommentReactionStore(cfg.DB)
 	commentSvc := service.NewCommentService(commentStore, issueStore, projectStore, workspaceStore)
 	commentSvc.SetReactionStore(commentReactionStore)
+	commentSvc.SetNotificationService(notificationSvc)
+	commentSvc.SetSubscriberStore(issueSubscriberStore)
 	workspaceLinkSvc := service.NewWorkspaceLinkService(workspaceUserLinkStore, workspaceStore)
 	stickySvc := service.NewStickyService(stickyStore, workspaceStore)
 	recentVisitSvc := service.NewRecentVisitService(userRecentVisitStore, workspaceStore, issueStore, projectStore, pageStore)
@@ -192,11 +202,14 @@ func New(cfg Config) *gin.Engine {
 		Queue:      cfg.Queue,
 		AppBaseURL: appBaseURL,
 	}
-	projectHandler := &handler.ProjectHandler{Project: projectSvc}
+	projectHandler := &handler.ProjectHandler{Project: projectSvc, State: stateSvc}
 	favoriteHandler := &handler.FavoriteHandler{Project: projectSvc, Favorites: userFavoriteStore}
 	stateHandler := &handler.StateHandler{State: stateSvc}
 	labelHandler := &handler.LabelHandler{Label: labelSvc}
 	issueHandler := &handler.IssueHandler{Issue: issueSvc}
+	issueLinkHandler := &handler.IssueLinkHandler{Issue: issueSvc}
+	attachmentHandler := &handler.AttachmentHandler{Attachment: attachmentSvc}
+	epicHandler := &handler.EpicHandler{Issue: issueSvc}
 	cycleHandler := &handler.CycleHandler{Cycle: cycleSvc}
 	moduleHandler := &handler.ModuleHandler{Module: moduleSvc}
 	issueViewHandler := &handler.IssueViewHandler{IssueView: issueViewSvc}
@@ -291,6 +304,16 @@ func New(cfg Config) *gin.Engine {
 		api.PUT("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/", issueHandler.ReplaceAssignees)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/:assigneeId/", issueHandler.RemoveAssignee)
 		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/activities/", issueHandler.ListActivities)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/", issueHandler.ListRelations)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/", issueHandler.CreateRelations)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/remove-relation/", issueHandler.RemoveRelation)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/issue-links/", issueLinkHandler.ListLinks)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/issue-links/", issueLinkHandler.CreateLink)
+		api.PATCH("/workspaces/:slug/projects/:projectId/issues/:pk/issue-links/:linkId/", issueLinkHandler.UpdateLink)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/issue-links/:linkId/", issueLinkHandler.DeleteLink)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.IsSubscribed)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.Subscribe)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/", issueHandler.Unsubscribe)
 
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.Create)
@@ -300,6 +323,9 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/", cycleHandler.ListIssues)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/", cycleHandler.AddIssue)
 		api.DELETE("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/:issueId/", cycleHandler.RemoveIssue)
+		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/progress/", cycleHandler.Progress)
+		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/cycle-progress/", cycleHandler.Progress)
+		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/analytics", cycleHandler.Analytics)
 
 		api.GET("/workspaces/:slug/projects/:projectId/modules/", moduleHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/modules/", moduleHandler.Create)
@@ -309,6 +335,19 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/projects/:projectId/modules/:moduleId/issues/", moduleHandler.ListIssues)
 		api.POST("/workspaces/:slug/projects/:projectId/modules/:moduleId/issues/", moduleHandler.AddIssue)
 		api.DELETE("/workspaces/:slug/projects/:projectId/modules/:moduleId/issues/:issueId/", moduleHandler.RemoveIssue)
+
+		// Epics (is_epic=true issues with dedicated routes)
+		api.GET("/workspaces/:slug/projects/:projectId/epics/", epicHandler.ListEpics)
+		api.POST("/workspaces/:slug/projects/:projectId/epics/", epicHandler.CreateEpic)
+		api.GET("/workspaces/:slug/projects/:projectId/epics/:epicId/", epicHandler.GetEpic)
+		api.PATCH("/workspaces/:slug/projects/:projectId/epics/:epicId/", epicHandler.UpdateEpic)
+		api.DELETE("/workspaces/:slug/projects/:projectId/epics/:epicId/", epicHandler.DeleteEpic)
+		api.GET("/workspaces/:slug/projects/:projectId/epics/:epicId/issues/", epicHandler.ListEpicIssues)
+		api.POST("/workspaces/:slug/projects/:projectId/epics/:epicId/issues/", epicHandler.AddIssueToEpic)
+		api.GET("/workspaces/:slug/projects/:projectId/epics/:epicId/links/", issueLinkHandler.ListLinks)
+		api.POST("/workspaces/:slug/projects/:projectId/epics/:epicId/links/", issueLinkHandler.CreateLink)
+		api.PATCH("/workspaces/:slug/projects/:projectId/epics/:epicId/links/:linkId/", issueLinkHandler.UpdateLink)
+		api.DELETE("/workspaces/:slug/projects/:projectId/epics/:epicId/links/:linkId/", issueLinkHandler.DeleteLink)
 
 		api.GET("/workspaces/:slug/views/", issueViewHandler.List)
 		api.POST("/workspaces/:slug/views/", issueViewHandler.Create)
@@ -326,13 +365,32 @@ func New(cfg Config) *gin.Engine {
 
 		api.GET("/workspaces/:slug/pages/", pageHandler.List)
 		api.POST("/workspaces/:slug/pages/", pageHandler.Create)
+		api.GET("/workspaces/:slug/pages/favorites/", pageHandler.ListFavorites)
 		api.GET("/workspaces/:slug/pages/:pageId/", pageHandler.Get)
-		api.PATCH("/workspaces/:slug/pages/:pageId/", pageHandler.Update)
+		api.PATCH("/workspaces/:slug/pages/:pageId/", pageHandler.UpdateMeta)
 		api.DELETE("/workspaces/:slug/pages/:pageId/", pageHandler.Delete)
+		api.GET("/workspaces/:slug/pages/:pageId/children/", pageHandler.ListChildren)
+		api.PATCH("/workspaces/:slug/pages/:pageId/content/", pageHandler.UpdateContent)
+		api.POST("/workspaces/:slug/pages/:pageId/lock/", pageHandler.Lock)
+		api.DELETE("/workspaces/:slug/pages/:pageId/lock/", pageHandler.Unlock)
+		api.POST("/workspaces/:slug/pages/:pageId/archive/", pageHandler.Archive)
+		api.DELETE("/workspaces/:slug/pages/:pageId/archive/", pageHandler.Unarchive)
+		api.POST("/workspaces/:slug/pages/:pageId/duplicate/", pageHandler.Duplicate)
+		api.GET("/workspaces/:slug/pages/:pageId/versions/", pageHandler.ListVersions)
+		api.GET("/workspaces/:slug/pages/:pageId/versions/:versionId/", pageHandler.GetVersion)
+		api.POST("/workspaces/:slug/pages/:pageId/versions/:versionId/restore/", pageHandler.RestoreVersion)
+		api.POST("/workspaces/:slug/pages/:pageId/favorite/", pageHandler.AddFavorite)
+		api.DELETE("/workspaces/:slug/pages/:pageId/favorite/", pageHandler.RemoveFavorite)
 
 		api.GET("/workspaces/:slug/notifications/", notificationHandler.List)
+		api.GET("/workspaces/:slug/notifications/unread-count/", notificationHandler.UnreadCount)
 		api.POST("/workspaces/:slug/notifications/mark-all-read/", notificationHandler.MarkAllRead)
 		api.POST("/workspaces/:slug/notifications/:id/read/", notificationHandler.MarkRead)
+		api.DELETE("/workspaces/:slug/notifications/:id/read/", notificationHandler.MarkUnread)
+		api.POST("/workspaces/:slug/notifications/:id/archive/", notificationHandler.Archive)
+		api.DELETE("/workspaces/:slug/notifications/:id/archive/", notificationHandler.Unarchive)
+		api.POST("/workspaces/:slug/notifications/:id/snooze/", notificationHandler.Snooze)
+		api.DELETE("/workspaces/:slug/notifications/:id/snooze/", notificationHandler.Unsnooze)
 
 		api.GET("/workspaces/:slug/quick-links/", workspaceLinkHandler.List)
 		api.POST("/workspaces/:slug/quick-links/", workspaceLinkHandler.Create)
@@ -368,6 +426,17 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubCreateSync)
 		api.PATCH("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubUpdateSync)
 		api.DELETE("/workspaces/:slug/projects/:projectId/integrations/github/sync/", integrationHandler.GitHubDeleteSync)
+
+		// File attachments (v2 assets API — matches Plane frontend service URLs).
+		api.GET("/assets/v2/workspaces/:slug/projects/:projectId/issues/:issueId/attachments/", attachmentHandler.ListAttachments)
+		api.POST("/assets/v2/workspaces/:slug/projects/:projectId/issues/:issueId/attachments/", attachmentHandler.InitiateUpload)
+		api.PATCH("/assets/v2/workspaces/:slug/projects/:projectId/issues/:issueId/attachments/:assetId/", attachmentHandler.ConfirmUpload)
+		api.DELETE("/assets/v2/workspaces/:slug/projects/:projectId/issues/:issueId/attachments/:assetId/", attachmentHandler.DeleteAttachment)
+		// Epic attachments share the same handler (serviceType=epics in the URL).
+		api.GET("/assets/v2/workspaces/:slug/projects/:projectId/epics/:issueId/attachments/", attachmentHandler.ListAttachments)
+		api.POST("/assets/v2/workspaces/:slug/projects/:projectId/epics/:issueId/attachments/", attachmentHandler.InitiateUpload)
+		api.PATCH("/assets/v2/workspaces/:slug/projects/:projectId/epics/:issueId/attachments/:assetId/", attachmentHandler.ConfirmUpload)
+		api.DELETE("/assets/v2/workspaces/:slug/projects/:projectId/epics/:issueId/attachments/:assetId/", attachmentHandler.DeleteAttachment)
 
 		// GitHub PR ↔ issue links (per-issue, for the issue detail sidebar).
 		// :pk is the issue id (matches the existing /issues/:pk/ routes — Gin

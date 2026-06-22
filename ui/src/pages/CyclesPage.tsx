@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Avatar, Badge, Button, Modal } from '../components/ui';
 import { UpdateCycleModal } from '../components/UpdateCycleModal';
 import { workspaceService } from '../services/workspaceService';
@@ -24,6 +24,7 @@ import {
 } from '../lib/projectCyclesEvents';
 import { useCycleFavorites } from '../hooks/useCycleFavorites';
 import { parseISODateForDisplay, parseISODateLocal } from '../lib/dateOnly';
+import { cyclePathSegment } from '../lib/cycle';
 import { cn, getImageUrl } from '../lib/utils';
 
 function pad2(n: number): string {
@@ -320,6 +321,7 @@ export function CyclesPage() {
   const [ellipsisMenuOpenId, setEllipsisMenuOpenId] = useState<string | null>(null);
   const [editCycle, setEditCycle] = useState<CycleApiResponse | null>(null);
   const [deleteCycleId, setDeleteCycleId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { toggleFavorite, isFavorite } = useCycleFavorites(workspaceSlug, projectId);
 
@@ -563,7 +565,9 @@ export function CyclesPage() {
     return c.status === 'completed' ? 100 : 0;
   };
   const cyclePath = (c: CycleApiResponse) =>
-    workspace && project ? `/${workspace.slug}/projects/${project.id}/cycles/${c.id}` : '';
+    workspace && project
+      ? `/${workspace.slug}/projects/${project.id}/cycles/${cyclePathSegment(c)}`
+      : '';
   const baseUrl = workspace && project ? `/${workspace.slug}/projects/${project.id}` : '';
 
   const stateGroupMap: Record<
@@ -706,6 +710,15 @@ export function CyclesPage() {
       <div
         key={c.id}
         className="flex items-center gap-3 border-b border-(--border-subtle) last:border-b-0 px-4 py-2 hover:bg-(--bg-layer-1-hover)"
+        role="button"
+        tabIndex={0}
+        onClick={() => navigate(path)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            navigate(path);
+          }
+        }}
       >
         <CycleProgressCircle progress={progress} />
         <div className="min-w-0 flex-1">

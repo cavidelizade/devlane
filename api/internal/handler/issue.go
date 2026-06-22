@@ -208,6 +208,7 @@ func (h *IssueHandler) Update(c *gin.Context) {
 		AssigneeIDs     []uuid.UUID `json:"assignee_ids"`
 		LabelIDs        []uuid.UUID `json:"label_ids"`
 		IsDraft         *bool       `json:"is_draft"`
+		Type            string      `json:"type"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
@@ -257,7 +258,11 @@ func (h *IssueHandler) Update(c *gin.Context) {
 		}
 	}
 
-	issue, err := h.Issue.Update(c.Request.Context(), slug, projectID, issueID, user.ID, name, priority, description, body.StateID, assigneeIDs, labelIDs, startDate, targetDate, body.ParentID, body.IsDraft)
+	var issueType *string
+	if body.Type != "" {
+		issueType = &body.Type
+	}
+	issue, err := h.Issue.Update(c.Request.Context(), slug, projectID, issueID, user.ID, name, priority, description, body.StateID, assigneeIDs, labelIDs, startDate, targetDate, body.ParentID, body.IsDraft, issueType)
 	if err != nil {
 		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
@@ -429,6 +434,203 @@ func (h *IssueHandler) Delete(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete issue"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// IsSubscribed reports whether the current user is subscribed to the issue.
+// GET /api/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/
+func (h *IssueHandler) IsSubscribed(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	subscribed, err := h.Issue.IsSubscribed(c.Request.Context(), slug, projectID, iid, user.ID)
+	if err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check subscription"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscribed": subscribed})
+}
+
+// Subscribe subscribes the current user to issue activity.
+// POST /api/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/
+func (h *IssueHandler) Subscribe(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	if err := h.Issue.Subscribe(c.Request.Context(), slug, projectID, iid, user.ID); err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to subscribe"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// Unsubscribe removes the current user's subscription.
+// DELETE /api/workspaces/:slug/projects/:projectId/issues/:pk/subscribe/
+func (h *IssueHandler) Unsubscribe(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	if err := h.Issue.Unsubscribe(c.Request.Context(), slug, projectID, iid, user.ID); err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// ListRelations returns the issue's relations grouped by type.
+// GET /api/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/
+func (h *IssueHandler) ListRelations(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	result, err := h.Issue.ListRelations(c.Request.Context(), slug, projectID, iid, user.ID)
+	if err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list relations"})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// CreateRelations adds relations from the issue toward the given issues.
+// POST /api/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/
+func (h *IssueHandler) CreateRelations(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		RelationType string      `json:"relation_type" binding:"required"`
+		Issues       []uuid.UUID `json:"issues" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
+		return
+	}
+	added, err := h.Issue.CreateRelations(c.Request.Context(), slug, projectID, iid, user.ID, body.RelationType, body.Issues)
+	if err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create relations"})
+		return
+	}
+	if added == nil {
+		c.JSON(http.StatusCreated, []interface{}{})
+		return
+	}
+	c.JSON(http.StatusCreated, added)
+}
+
+// RemoveRelation deletes a specific relation from the issue.
+// POST /api/workspaces/:slug/projects/:projectId/issues/:pk/remove-relation/
+func (h *IssueHandler) RemoveRelation(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	iid, ok := issueID(c)
+	if !ok {
+		return
+	}
+	var body struct {
+		RelationType string    `json:"relation_type" binding:"required"`
+		RelatedIssue uuid.UUID `json:"related_issue" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
+		return
+	}
+	if err := h.Issue.RemoveRelation(c.Request.Context(), slug, projectID, iid, user.ID, body.RelationType, body.RelatedIssue); err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove relation"})
 		return
 	}
 	c.Status(http.StatusNoContent)
