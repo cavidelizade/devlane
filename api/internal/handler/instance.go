@@ -12,6 +12,7 @@ import (
 
 	"github.com/Devlaner/devlane/api/internal/auth"
 	"github.com/Devlaner/devlane/api/internal/crypto"
+	"github.com/Devlaner/devlane/api/internal/middleware"
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/gin-gonic/gin"
@@ -128,9 +129,43 @@ func generateInstanceID() string {
 	return hex.EncodeToString(b)
 }
 
-// GetSettings returns all instance settings sections; secrets are decrypted for admin UI.
+// isInstanceAdmin reports whether the authenticated user is the instance
+// administrator, identified by general.admin_email (seeded at first-run setup).
+// Returns false (fail closed) when no admin email is configured.
+func (h *InstanceSettingsHandler) isInstanceAdmin(c *gin.Context) bool {
+	user := middleware.GetUser(c)
+	if user == nil || user.Email == nil {
+		return false
+	}
+	row, err := h.Settings.Get(c.Request.Context(), "general")
+	if err != nil || row == nil {
+		return false
+	}
+	adminEmail, _ := row.Value["admin_email"].(string)
+	adminEmail = strings.TrimSpace(adminEmail)
+	if adminEmail == "" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(*user.Email), adminEmail)
+}
+
+// requireInstanceAdmin writes a 403 and returns false if the caller is not the
+// instance administrator.
+func (h *InstanceSettingsHandler) requireInstanceAdmin(c *gin.Context) bool {
+	if !h.isInstanceAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Instance admin access required"})
+		return false
+	}
+	return true
+}
+
+// GetSettings returns all instance settings sections. Secret values are never
+// returned (only <secret>_set booleans); admin access is required.
 // GET /api/instance/settings/
 func (h *InstanceSettingsHandler) GetSettings(c *gin.Context) {
+	if !h.requireInstanceAdmin(c) {
+		return
+	}
 	all, err := h.Settings.GetAll(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load settings"})
@@ -138,7 +173,7 @@ func (h *InstanceSettingsHandler) GetSettings(c *gin.Context) {
 	}
 	out := make(map[string]model.JSONMap)
 	for k, row := range all {
-		out[k] = decryptSectionSecrets(k, row.Value)
+		out[k] = sanitizeSectionForResponse(k, row.Value)
 	}
 	// Ensure all sections exist with defaults (migration seed may not have run if DB was created before seed)
 	for _, key := range []string{"general", "email", "auth", "oauth", "ai", "image", "github_app"} {
@@ -149,35 +184,28 @@ func (h *InstanceSettingsHandler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// decryptSectionSecrets returns a copy of m with secret keys decrypted for response.
-func decryptSectionSecrets(sectionKey string, m model.JSONMap) model.JSONMap {
+// secretKeysBySection lists the encrypted secret fields stored in each settings section.
+var secretKeysBySection = map[string][]string{
+	"email":      {"password"},
+	"oauth":      {"google_client_secret", "github_client_secret", "gitlab_client_secret"},
+	"ai":         {"api_key"},
+	"image":      {"unsplash_access_key"},
+	"github_app": {"private_key", "client_secret", "webhook_secret"},
+}
+
+// decryptSectionSecretsInternal returns a copy of m with secret fields decrypted
+// for SERVER-SIDE use only (building OAuth providers, proxying Unsplash). The
+// result MUST NOT be returned to a client — use sanitizeSectionForResponse for
+// anything sent over the wire.
+func decryptSectionSecretsInternal(sectionKey string, m model.JSONMap) model.JSONMap {
 	if m == nil {
 		return nil
 	}
-	var secretKeys []string
-	switch sectionKey {
-	case "email":
-		secretKeys = []string{"password"}
-	case "oauth":
-		secretKeys = []string{"google_client_secret", "github_client_secret", "gitlab_client_secret"}
-	case "ai":
-		secretKeys = []string{"api_key"}
-	case "image":
-		secretKeys = []string{"unsplash_access_key"}
-	case "github_app":
-		// We never echo private_key / client_secret / webhook_secret back to the
-		// admin UI in plain text; only the *_set boolean flags are exposed.
-		// Returning the section unchanged is fine because the response builder
-		// strips these via stripSecretValues below.
-		return stripSecretValues(m, "private_key", "client_secret", "webhook_secret")
-	default:
-		return m
-	}
-	out := make(model.JSONMap)
+	out := make(model.JSONMap, len(m))
 	for k, v := range m {
 		out[k] = v
 	}
-	for _, sk := range secretKeys {
+	for _, sk := range secretKeysBySection[sectionKey] {
 		if v, ok := out[sk].(string); ok {
 			out[sk] = crypto.DecryptOrPlain(v)
 		}
@@ -185,21 +213,22 @@ func decryptSectionSecrets(sectionKey string, m model.JSONMap) model.JSONMap {
 	return out
 }
 
-// stripSecretValues returns a copy of m with the named keys replaced by an
-// empty string. Used for sections (like github_app) where a secret is stored
-// encrypted and exposed to the admin UI only through a *_set boolean.
-func stripSecretValues(m model.JSONMap, keys ...string) model.JSONMap {
-	out := make(model.JSONMap, len(m))
-	stripped := make(map[string]bool, len(keys))
-	for _, k := range keys {
-		stripped[k] = true
+// sanitizeSectionForResponse returns a copy of m with every secret value removed
+// and a corresponding <secret>_set boolean reflecting whether a value is stored.
+// Secrets are NEVER returned to any client — the admin re-enters them to change
+// them (UpdateSetting preserves existing secrets when a field is sent empty).
+func sanitizeSectionForResponse(sectionKey string, m model.JSONMap) model.JSONMap {
+	if m == nil {
+		return nil
 	}
+	out := make(model.JSONMap, len(m))
 	for k, v := range m {
-		if stripped[k] {
-			out[k] = ""
-			continue
-		}
 		out[k] = v
+	}
+	for _, sk := range secretKeysBySection[sectionKey] {
+		stored, _ := out[sk].(string)
+		out[sk] = ""
+		out[sk+"_set"] = strings.TrimSpace(stored) != ""
 	}
 	return out
 }
@@ -240,6 +269,9 @@ type UpdateSettingRequest struct {
 // UpdateSetting updates one instance settings section by key.
 // PATCH /api/instance/settings/:key
 func (h *InstanceSettingsHandler) UpdateSetting(c *gin.Context) {
+	if !h.requireInstanceAdmin(c) {
+		return
+	}
 	key := strings.TrimSpace(strings.ToLower(c.Param("key")))
 	if key == "" || !allowedSettingKeys[key] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid settings key"})
@@ -423,8 +455,8 @@ func (h *InstanceSettingsHandler) UpdateSetting(c *gin.Context) {
 	if h.OnSectionUpdated != nil {
 		h.OnSectionUpdated(c.Request.Context(), key)
 	}
-	// Return decrypted secrets so client sees the value they just set
-	responseValue := decryptSectionSecrets(key, value)
+	// Never echo secrets back; the client already has the value it just set.
+	responseValue := sanitizeSectionForResponse(key, value)
 	c.JSON(http.StatusOK, gin.H{"key": key, "value": responseValue})
 }
 
@@ -462,7 +494,7 @@ func (h *InstanceSettingsHandler) UnsplashSearch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsplash is not configured"})
 		return
 	}
-	decrypted := decryptSectionSecrets("image", row.Value)
+	decrypted := decryptSectionSecretsInternal("image", row.Value)
 	keyVal, _ := decrypted["unsplash_access_key"].(string)
 	keyVal = strings.TrimSpace(keyVal)
 	if keyVal == "" {

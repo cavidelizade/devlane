@@ -60,9 +60,12 @@ func (g *GitHubProvider) GetUserInfo(ctx context.Context, token *TokenData) (*Us
 	if err != nil {
 		return nil, err
 	}
-	email := strVal(resp, "email")
-	if email == "" {
-		email, _ = g.fetchPrimaryEmail(ctx, token.AccessToken)
+	// Resolve a VERIFIED email from /user/emails. The top-level profile email is
+	// not necessarily verified, so we never trust it directly — otherwise an
+	// account with an unverified address matching a victim could be linked.
+	email, err := g.fetchPrimaryEmail(ctx, token.AccessToken)
+	if err != nil || email == "" {
+		return nil, ErrEmailNotVerified
 	}
 	return &UserInfo{
 		Email:      email,
@@ -98,10 +101,11 @@ func (g *GitHubProvider) fetchPrimaryEmail(ctx context.Context, accessToken stri
 			return e.Email, nil
 		}
 	}
+	// Fall back to any verified email, but never to an unverified one.
 	for _, e := range emails {
-		if e.Primary {
+		if e.Verified {
 			return e.Email, nil
 		}
 	}
-	return "", fmt.Errorf("no primary email found")
+	return "", fmt.Errorf("no verified email found")
 }

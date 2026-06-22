@@ -86,6 +86,7 @@ func TestInstance_Settings_RequiresAuth(t *testing.T) {
 func TestInstance_Settings_GetWithAuth(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	user := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, user)
 	session := testutil.LoginAs(t, ts.DB, user)
 
 	rr := ts.GET("/api/instance/settings/", session)
@@ -98,9 +99,50 @@ func TestInstance_Settings_GetWithAuth(t *testing.T) {
 	}
 }
 
+func TestInstance_Settings_NonAdminForbidden(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	admin := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, admin)
+	// A different, non-admin authenticated user must not read instance settings.
+	other := testutil.CreateUser(t, ts.DB)
+	session := testutil.LoginAs(t, ts.DB, other)
+
+	rr := ts.GET("/api/instance/settings/", session)
+	require.Equal(t, http.StatusForbidden, rr.Code, "body=%s", rr.Body.String())
+
+	rr2 := ts.PATCH("/api/instance/settings/email", map[string]any{
+		"value": map[string]any{"host": "attacker.example.com"},
+	}, session)
+	require.Equal(t, http.StatusForbidden, rr2.Code, "body=%s", rr2.Body.String())
+}
+
+func TestInstance_Settings_SecretsNotReturned(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	user := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, user)
+	session := testutil.LoginAs(t, ts.DB, user)
+
+	// Store an SMTP password.
+	rr := ts.PATCH("/api/instance/settings/email", map[string]any{
+		"value": map[string]any{"host": "smtp.example.com", "password": "super-secret"},
+	}, session)
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+
+	// GET must never echo the plaintext secret back — only password_set.
+	rr2 := ts.GET("/api/instance/settings/", session)
+	require.Equal(t, http.StatusOK, rr2.Code)
+	body := testutil.MustJSONMap(t, rr2)
+	email, _ := body["email"].(map[string]any)
+	require.NotNil(t, email)
+	assert.Equal(t, "", email["password"])
+	assert.Equal(t, true, email["password_set"])
+	assert.NotContains(t, rr2.Body.String(), "super-secret")
+}
+
 func TestInstance_Settings_UpdateGeneral(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	user := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, user)
 	session := testutil.LoginAs(t, ts.DB, user)
 
 	rr := ts.PATCH("/api/instance/settings/general", map[string]any{
@@ -122,6 +164,7 @@ func TestInstance_Settings_UpdateGeneral(t *testing.T) {
 func TestInstance_Settings_UpdateInvalidKey(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	user := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, user)
 	session := testutil.LoginAs(t, ts.DB, user)
 
 	rr := ts.PATCH("/api/instance/settings/not-a-real-section", map[string]any{
