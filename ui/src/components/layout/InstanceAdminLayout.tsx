@@ -344,7 +344,7 @@ export function InstanceAdminLayout() {
           </nav>
           <div className="flex shrink-0 flex-col gap-0.5 border-t border-(--border-subtle) p-1.5">
             <a
-              href="http://localhost:5173"
+              href={window.location.origin}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-(--txt-secondary) no-underline hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
