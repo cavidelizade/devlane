@@ -88,6 +88,7 @@ func New(cfg Config) *gin.Engine {
 	// Password reset tokens
 	passwordResetTokenStore := store.NewPasswordResetTokenStore(cfg.DB)
 	accountStore := store.NewAccountStore(cfg.DB)
+	instanceAdminStore := store.NewInstanceAdminStore(cfg.DB)
 
 	// Auth
 	authSvc := auth.NewService(userStore, sessionStore, passwordResetTokenStore)
@@ -113,7 +114,7 @@ func New(cfg Config) *gin.Engine {
 		Log:               cfg.Log,
 	}
 	// Instance setup (no auth) — first-run flow; seeds general settings (instance_id, admin_email, instance_name)
-	instanceHandler := &handler.InstanceHandler{Auth: authSvc, Users: userStore, Settings: instanceSettingStore}
+	instanceHandler := &handler.InstanceHandler{Auth: authSvc, Users: userStore, Settings: instanceSettingStore, Admins: instanceAdminStore}
 	r.GET("/api/instance/setup-status/", instanceHandler.SetupStatus)
 	r.POST("/api/instance/setup/", instanceHandler.InstanceSetup)
 
@@ -121,7 +122,7 @@ func New(cfg Config) *gin.Engine {
 	r.GET("/api/invitations/by-token/", invitationHandler.GetInviteByToken)
 	r.POST("/api/invitations/decline/", invitationHandler.DeclineInviteByToken)
 
-	instanceSettingsHandler := &handler.InstanceSettingsHandler{Settings: instanceSettingStore}
+	instanceSettingsHandler := &handler.InstanceSettingsHandler{Settings: instanceSettingStore, Admins: instanceAdminStore, Users: userStore}
 
 	// Services
 	workspaceSvc := service.NewWorkspaceService(workspaceStore, workspaceInviteStore, userStore)
@@ -133,7 +134,9 @@ func New(cfg Config) *gin.Engine {
 	issueSvc.SetActivityStore(issueActivityStore)
 	attachmentSvc := service.NewAttachmentService(issueStore, projectStore, workspaceStore, cfg.Minio)
 	cycleSvc := service.NewCycleService(cycleStore, projectStore, workspaceStore)
+	cycleSvc.SetIssueStore(issueStore)
 	moduleSvc := service.NewModuleService(moduleStore, projectStore, workspaceStore)
+	moduleSvc.SetIssueStore(issueStore)
 	issueViewSvc := service.NewIssueViewService(issueViewStore, projectStore, workspaceStore, userFavoriteStore)
 	pageSvc := service.NewPageService(pageStore, projectStore, workspaceStore)
 	pageSvc.SetFavoriteStore(userFavoriteStore)
@@ -239,6 +242,10 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/instance/settings/", instanceSettingsHandler.GetSettings)
 		api.PATCH("/instance/settings/:key", instanceSettingsHandler.UpdateSetting)
 		api.GET("/instance/unsplash/search", instanceSettingsHandler.UnsplashSearch)
+		// Instance-admin management (admin-gated inside the handler).
+		api.GET("/instance/admins/", instanceSettingsHandler.ListAdmins)
+		api.POST("/instance/admins/", instanceSettingsHandler.AddAdmin)
+		api.DELETE("/instance/admins/:id/", instanceSettingsHandler.RemoveAdmin)
 
 		uploadHandler := &handler.UploadHandler{Minio: cfg.Minio}
 		api.POST("/upload", uploadHandler.Upload)

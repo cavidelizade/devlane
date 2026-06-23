@@ -31,6 +31,7 @@ import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { pageService } from '../services/pageService';
 import { cn } from '../lib/utils';
+import { sanitizeHtml } from '../lib/sanitize';
 import type {
   PageApiResponse,
   PageVersionApiResponse,
@@ -851,7 +852,7 @@ export function PageDetailPage() {
             </div>
             <div
               className="prose prose-sm max-h-[60vh] max-w-none overflow-y-auto rounded border border-(--border-subtle) bg-(--bg-canvas) p-3 text-(--txt-primary)"
-              dangerouslySetInnerHTML={{ __html: previewVersion.description_html ?? '' }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewVersion.description_html) }}
             />
           </div>
         </Modal>

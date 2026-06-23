@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, Avatar } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { Dropdown, DatePickerTrigger, CommentEditor } from '../components/work-item';
+import { sanitizeHtml, safeUrl } from '../lib/sanitize';
 import { DescriptionEditor } from '../components/work-item/DescriptionEditor';
 import { IssueActivityFeed } from '../components/work-item/IssueActivityFeed';
 import { CommentReactions } from '../components/work-item/CommentReactions';
@@ -756,7 +757,7 @@ export function IssueDetailPage() {
                             <>
                               <div
                                 className="prose prose-sm mt-1 max-w-none text-(--txt-primary) [&_a]:text-(--txt-accent-primary) [&_a]:underline [&_code]:rounded [&_code]:bg-(--bg-layer-1) [&_code]:px-1 [&_code]:py-0.5"
-                                dangerouslySetInnerHTML={{ __html: c.comment }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.comment) }}
                               />
                               {workspaceSlug && (
                                 <CommentReactions
@@ -906,7 +907,7 @@ export function IssueDetailPage() {
                 links.map((l) => (
                   <div key={l.id} className="flex items-center gap-1 group">
                     <a
-                      href={l.url}
+                      href={safeUrl(l.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="min-w-0 flex-1 truncate text-xs text-(--txt-accent-primary) hover:underline"
