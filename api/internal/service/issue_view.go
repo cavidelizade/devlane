@@ -141,12 +141,17 @@ func (s *IssueViewService) Create(ctx context.Context, workspaceSlug string, pro
 }
 
 func (s *IssueViewService) Get(ctx context.Context, workspaceSlug string, viewID uuid.UUID, userID uuid.UUID) (*model.IssueView, error) {
-	_, err := s.ensureWorkspaceAccess(ctx, workspaceSlug, userID)
+	workspaceID, err := s.ensureWorkspaceAccess(ctx, workspaceSlug, userID)
 	if err != nil {
 		return nil, err
 	}
 	iv, err := s.ivs.GetByID(ctx, viewID)
 	if err != nil {
+		return nil, ErrIssueViewNotFound
+	}
+	// The view must belong to the workspace in the URL — otherwise any member of
+	// any workspace could read another workspace's view by id.
+	if iv.WorkspaceID != workspaceID {
 		return nil, ErrIssueViewNotFound
 	}
 	if s.fav != nil {
