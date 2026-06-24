@@ -6,15 +6,15 @@ npx lint-staged
 
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 
-if echo "$STAGED_FILES" | grep -qE '^ui/'; then
+if echo "$STAGED_FILES" | grep -qE '^apps/web/'; then
   echo "📦 UI: typecheck + full ESLint..."
-  npm --prefix ui run typecheck
-  npm --prefix ui run lint
+  npm --prefix apps/web run typecheck
+  npm --prefix apps/web run lint
 fi
 
-if echo "$STAGED_FILES" | grep -qE '^api/.*\.go$|^api/go\.(mod|sum)$'; then
+if echo "$STAGED_FILES" | grep -qE '^apps/api/.*\.go$|^apps/api/go\.(mod|sum)$'; then
   echo "🔧 API: go vet + go test..."
-  (cd api && go vet ./... && go test ./...)
+  (cd apps/api && go vet ./... && go test ./...)
 fi
 
 echo "✅ pre-commit OK"

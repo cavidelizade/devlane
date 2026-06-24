@@ -4,12 +4,12 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'api/**'
+      - 'apps/api/**'
       - '.github/workflows/api-ci.yml'
 
 defaults:
   run:
-    working-directory: api
+    working-directory: apps/api
 
 jobs:
   build-and-test:
@@ -21,8 +21,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: api/go.mod
-          cache-dependency-path: api/go.sum
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
 
       - name: Verify dependencies
         run: go mod verify

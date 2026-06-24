@@ -1,4 +1,4 @@
-![Devlane](./ui/public/devlane-1-dark.png)
+![Devlane](./apps/web/public/devlane-1-dark.png)
 
 **Issue tracking and project management for development teams.**
 
@@ -37,8 +37,8 @@ Instance administrators can manage workspaces and instance settings from the ins
 
 ## Local development
 
-1. **API** — From the `api` directory, copy `.env.example` to `.env`, set your PostgreSQL and Redis (and optional RabbitMQ/MinIO) settings, run migrations, then start the server (see `api/README.md`).
-2. **UI** — From the `ui` directory, run `npm install` and `npm run dev`. Point the UI at your local API using the configured base URL.
+1. **API** — From the `apps/api` directory, copy `.env.example` to `.env`, set your PostgreSQL and Redis (and optional RabbitMQ/MinIO) settings, run migrations, then start the server (see `apps/api/README.md`).
+2. **UI** — From the `apps/web` directory, run `npm install` and `npm run dev`. Point the UI at your local API using the configured base URL.
 3. **First run** — Complete instance setup in the browser (create admin account, then create a workspace and project).
 
 For contribution workflow and code style, see [CONTRIBUTING](CONTRIBUTING.md) if present.
@@ -66,8 +66,8 @@ For contribution workflow and code style, see [CONTRIBUTING](CONTRIBUTING.md) if
 
 ## Documentation
 
-- **API** — See `api/README.md` for setup, env vars, and running the server.
-- **UI** — See `ui/README.md` for front-end setup and scripts.
+- **API** — See `apps/api/README.md` for setup, env vars, and running the server.
+- **UI** — See `apps/web/README.md` for front-end setup and scripts.
 
 ---
 
