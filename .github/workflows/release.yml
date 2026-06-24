@@ -66,8 +66,8 @@ jobs:
       - name: Build & push API image
         uses: docker/build-push-action@v6
         with:
-          context: ./api
-          file: ./api/Dockerfile
+          context: ./apps/api
+          file: ./apps/api/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -116,8 +116,8 @@ jobs:
       - name: Build & push UI image
         uses: docker/build-push-action@v6
         with:
-          context: ./ui
-          file: ./ui/Dockerfile
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -34,7 +34,7 @@ body:
     attributes:
       label: Location
       description: File path, doc URL, or section.
-      placeholder: README.md, planning/backend-architecture.md, code comment in api/internal/router/router.go
+      placeholder: README.md, planning/backend-architecture.md, code comment in apps/api/internal/router/router.go
     validations:
       required: true
 

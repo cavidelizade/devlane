@@ -2,7 +2,7 @@
   "name": "devlane",
   "version": "1.2.1",
   "private": true,
-  "description": "![Devlane](./ui/public/devlane-1-dark.png)",
+  "description": "![Devlane](./apps/web/public/devlane-1-dark.png)",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -10,7 +10,7 @@
   "scripts": {
     "test": "npm run validate",
     "prepare": "husky",
-    "validate": "npm --prefix ui run typecheck && npm --prefix ui run lint && npm --prefix ui run format:check && cd api && go vet ./... && go test ./..."
+    "validate": "npm --prefix apps/web run typecheck && npm --prefix apps/web run lint && npm --prefix apps/web run format:check && cd apps/api && go vet ./... && go test ./..."
   },
   "keywords": [],
   "author": "",

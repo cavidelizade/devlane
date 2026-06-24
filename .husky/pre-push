@@ -2,7 +2,7 @@
 set -e
 
 echo "🚀 pre-push: UI typecheck + API tests..."
-npm --prefix ui run typecheck
-(cd api && go test ./...)
+npm --prefix apps/web run typecheck
+(cd apps/api && go test ./...)
 
 echo "✅ pre-push OK"

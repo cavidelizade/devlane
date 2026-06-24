@@ -32,9 +32,9 @@ Closes #
 ## Surface
 
 <!-- Tick all that apply. -->
-- [ ] API (`api/`)
-- [ ] UI (`ui/`)
-- [ ] Database migration (`api/migrations/`)
+- [ ] API (`apps/api/`)
+- [ ] UI (`apps/web/`)
+- [ ] Database migration (`apps/api/migrations/`)
 - [ ] Background jobs (RabbitMQ / queue)
 - [ ] Instance settings / Admin UI
 - [ ] Infra / Docker / CI
@@ -52,7 +52,7 @@ Closes #
 ## Database / migrations
 
 <!-- Required if you added a migration. Otherwise: "No schema changes". -->
-- [ ] Added `api/migrations/NNNNNN_<name>.up.sql` AND matching `.down.sql`
+- [ ] Added `apps/api/migrations/NNNNNN_<name>.up.sql` AND matching `.down.sql`
 - [ ] Migration is idempotent / safe to re-run on a fresh DB
 - [ ] Migration applied cleanly via `database.RunMigrations` on startup
 
@@ -81,7 +81,7 @@ Closes #
 ## Rollout notes
 
 <!-- Anything reviewers / deployer needs to know:
-     - new env var? document default in api/internal/config/config.go and here
+     - new env var? document default in apps/api/internal/config/config.go and here
      - new instance_settings field? note where it's edited in the admin UI
      - feature flag / gating? say so
      - data backfill required after deploy? say so

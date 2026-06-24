@@ -19,11 +19,11 @@ Closes #
 
 ## What changed
 
-### API (`api/`)
+### API (`apps/api/`)
 <!-- New endpoints, new env vars, new stores/services. Note routes with their HTTP verbs. -->
 -
 
-### UI (`ui/`)
+### UI (`apps/web/`)
 <!-- New pages / components / services. Note where it's mounted in the route tree. -->
 -
 
