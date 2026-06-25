@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../components/ui';
 import { CreateWorkItemModal } from '../components/CreateWorkItemModal';
@@ -110,6 +110,8 @@ export function IssueListPage() {
   const [listDisplay, setListDisplay] = useState<ProjectIssuesDisplayState>(() =>
     cloneDefaultProjectIssuesDisplay(),
   );
+  // Chains reorder saves so rapid drags commit in order (see handleReorder).
+  const reorderChain = useRef<Promise<unknown>>(Promise.resolve());
   useDocumentTitle('Work items');
 
   const refetchIssues = () => {
@@ -554,31 +556,32 @@ export function IssueListPage() {
     now,
   };
 
-  // Manual drag-to-reorder (flat list + manual order): build the new flat order,
-  // assign evenly-spaced sort_order optimistically, then persist the id order so
-  // it works even when items currently share the default sort_order.
+  // Manual drag-to-reorder. We splice the move into the FULL loaded issue set
+  // (in manual order) — not just the visible/filtered rows — so hidden items
+  // keep consistent positions, then persist the whole canonical order. Saves are
+  // chained so rapid drags commit in order (no stale overwrite).
   const handleReorder = (activeId: string, overId: string, after: boolean) => {
     if (!workspaceSlug || !projectId || activeId === overId) return;
-    const flat = groupedIssues.isFlat
-      ? (groupedIssues.groups.get(groupedIssues.order[0]) ?? [])
-      : [];
-    const without = flat.filter((i) => i.id !== activeId);
+    const fullOrdered = [...issues].sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+        (a.sequence_id ?? 0) - (b.sequence_id ?? 0) ||
+        a.name.localeCompare(b.name),
+    );
+    const active = fullOrdered.find((i) => i.id === activeId);
+    const without = fullOrdered.filter((i) => i.id !== activeId);
     const overIdx = without.findIndex((i) => i.id === overId);
-    if (overIdx === -1) return;
-    const active = flat.find((i) => i.id === activeId);
-    if (!active) return;
+    if (!active || overIdx === -1) return;
     const insertIdx = after ? overIdx + 1 : overIdx;
     const newOrder = [...without.slice(0, insertIdx), active, ...without.slice(insertIdx)];
     const orderById = new Map(newOrder.map((iss, idx) => [iss.id, (idx + 1) * 1024]));
     setIssues((prev) =>
       prev.map((i) => (orderById.has(i.id) ? { ...i, sort_order: orderById.get(i.id)! } : i)),
     );
-    issueService
-      .reorder(
-        workspaceSlug,
-        projectId,
-        newOrder.map((i) => i.id),
-      )
+    const ids = newOrder.map((i) => i.id);
+    reorderChain.current = reorderChain.current
+      .catch(() => {})
+      .then(() => issueService.reorder(workspaceSlug, projectId, ids))
       .catch(() => refetchIssues());
   };
 

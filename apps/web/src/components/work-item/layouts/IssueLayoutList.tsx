@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GripVertical } from 'lucide-react';
 import { IssuePRBadge } from '../IssuePRBadge';
@@ -77,7 +77,31 @@ export function IssueLayoutList({
     setDropTarget(null);
   };
 
-  const renderRow = (issue: IssueApiResponse) => {
+  // Keyboard reorder: keep focus on the moved row's handle across the re-render
+  // so repeated Arrow presses keep working.
+  const handleRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingFocusId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = pendingFocusId.current;
+    if (!id) return;
+    pendingFocusId.current = null;
+    handleRefs.current.get(id)?.focus();
+  });
+  const keyboardMove =
+    (issue: IssueApiResponse, idx: number, list: IssueApiResponse[]) =>
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowUp' && idx > 0) {
+        e.preventDefault();
+        pendingFocusId.current = issue.id;
+        onReorder!(issue.id, list[idx - 1]!.id, false);
+      } else if (e.key === 'ArrowDown' && idx < list.length - 1) {
+        e.preventDefault();
+        pendingFocusId.current = issue.id;
+        onReorder!(issue.id, list[idx + 1]!.id, true);
+      }
+    };
+
+  const renderRow = (issue: IssueApiResponse, idx?: number, list?: IssueApiResponse[]) => {
     const displayId = `${project.identifier ?? project.id.slice(0, 8)}-${issue.sequence_id ?? issue.id.slice(-4)}`;
     const subN = subWorkCountByParentId.get(issue.id) ?? 0;
     const issueState = issue.state_id ? (stateById.get(issue.state_id) ?? null) : null;
@@ -123,19 +147,27 @@ export function IssueLayoutList({
         }
       >
         {reorderable ? (
-          <span
+          <button
+            type="button"
             draggable
+            ref={(el) => {
+              if (el) handleRefs.current.set(issue.id, el);
+              else handleRefs.current.delete(issue.id);
+            }}
             onDragStart={(e) => {
               setDraggingId(issue.id);
               e.dataTransfer.effectAllowed = 'move';
             }}
             onDragEnd={clearDrag}
-            className="flex shrink-0 cursor-grab items-center pl-2 text-(--txt-icon-tertiary) opacity-0 transition-opacity hover:text-(--txt-icon-secondary) active:cursor-grabbing group-hover/row:opacity-100"
-            aria-label={`Reorder ${displayId}`}
-            title="Drag to reorder"
+            onKeyDown={
+              list !== undefined && idx !== undefined ? keyboardMove(issue, idx, list) : undefined
+            }
+            className="flex shrink-0 cursor-grab items-center rounded-sm pl-2 text-(--txt-icon-tertiary) opacity-0 transition-opacity hover:text-(--txt-icon-secondary) focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--border-focus) active:cursor-grabbing group-hover/row:opacity-100"
+            aria-label={`Reorder ${displayId}. Use Arrow Up or Arrow Down to move.`}
+            title="Drag, or focus and use arrow keys, to reorder"
           >
             <GripVertical className="size-4" />
-          </span>
+          </button>
         ) : null}
         {selection ? (
           <span className="shrink-0 pl-4">
@@ -209,9 +241,10 @@ export function IssueLayoutList({
   };
 
   if (groupedIssues.isFlat) {
+    const flatList = groupedIssues.groups.get(groupedIssues.order[0]) ?? [];
     return (
       <ul className="w-full divide-y divide-(--border-subtle)">
-        {(groupedIssues.groups.get(groupedIssues.order[0]) ?? []).map((issue) => renderRow(issue))}
+        {flatList.map((issue, idx) => renderRow(issue, idx, flatList))}
       </ul>
     );
   }
