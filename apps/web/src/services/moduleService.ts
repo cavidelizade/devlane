@@ -8,6 +8,7 @@ export interface CreateModulePayload {
   start_date?: string;
   target_date?: string;
   lead_id?: string;
+  member_ids?: string[];
 }
 
 export const moduleService = {

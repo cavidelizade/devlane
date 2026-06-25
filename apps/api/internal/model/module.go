@@ -19,6 +19,7 @@ type Module struct {
 	WorkspaceID uuid.UUID      `gorm:"type:uuid;not null" json:"workspace_id"`
 	IssueCount  int            `gorm:"-" json:"issue_count,omitempty"`
 	LeadID      *uuid.UUID     `gorm:"type:uuid" json:"lead_id,omitempty"`
+	MemberIDs   []uuid.UUID    `gorm:"-" json:"member_ids"`
 	SortOrder   float64        `gorm:"column:sort_order;default:65535" json:"sort_order"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
@@ -30,6 +31,26 @@ type Module struct {
 func (Module) TableName() string { return "modules" }
 
 func (m *Module) BeforeCreate(tx *gorm.DB) error {
+	if m.ID == uuid.Nil {
+		m.ID = uuid.New()
+	}
+	return nil
+}
+
+// ModuleMember matches module_members (M2M between modules and users).
+type ModuleMember struct {
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	ModuleID    uuid.UUID  `gorm:"type:uuid;not null" json:"module_id"`
+	MemberID    uuid.UUID  `gorm:"type:uuid;not null" json:"member_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	CreatedByID *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
+	UpdatedByID *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
+}
+
+func (ModuleMember) TableName() string { return "module_members" }
+
+func (m *ModuleMember) BeforeCreate(tx *gorm.DB) error {
 	if m.ID == uuid.Nil {
 		m.ID = uuid.New()
 	}

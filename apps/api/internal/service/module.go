@@ -62,10 +62,21 @@ func (s *ModuleService) List(ctx context.Context, workspaceSlug string, projectI
 			list[i].IssueCount = counts[list[i].ID]
 		}
 	}
+	members, err := s.ms.ListMemberIDsByModuleIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if m := members[list[i].ID]; m != nil {
+			list[i].MemberIDs = m
+		} else {
+			list[i].MemberIDs = []uuid.UUID{}
+		}
+	}
 	return list, nil
 }
 
-func (s *ModuleService) Create(ctx context.Context, workspaceSlug string, projectID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, targetDate *time.Time) (*model.Module, error) {
+func (s *ModuleService) Create(ctx context.Context, workspaceSlug string, projectID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, targetDate *time.Time, leadID *uuid.UUID, memberIDs []uuid.UUID) (*model.Module, error) {
 	if err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
 		return nil, err
 	}
@@ -81,11 +92,39 @@ func (s *ModuleService) Create(ctx context.Context, workspaceSlug string, projec
 		TargetDate:  targetDate,
 		ProjectID:   projectID,
 		WorkspaceID: wrk.ID,
+		LeadID:      leadID,
 	}
-	if err := s.ms.Create(ctx, mod); err != nil {
+	// Keep the module insert and its member set atomic.
+	if err := s.ms.Tx(ctx, func(tx *store.ModuleStore) error {
+		if err := tx.Create(ctx, mod); err != nil {
+			return err
+		}
+		if len(memberIDs) > 0 {
+			return tx.SetMembers(ctx, mod.ID, memberIDs, userID)
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
+	ids, err := s.memberIDs(ctx, mod.ID)
+	if err != nil {
+		return nil, err
+	}
+	mod.MemberIDs = ids
 	return mod, nil
+}
+
+// memberIDs returns a module's member ids as a non-nil slice (so JSON renders
+// []), surfacing read errors rather than masking them as an empty team.
+func (s *ModuleService) memberIDs(ctx context.Context, moduleID uuid.UUID) ([]uuid.UUID, error) {
+	ids, err := s.ms.ListMemberIDs(ctx, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	if ids == nil {
+		return []uuid.UUID{}, nil
+	}
+	return ids, nil
 }
 
 func (s *ModuleService) Get(ctx context.Context, workspaceSlug string, projectID, moduleID uuid.UUID, userID uuid.UUID) (*model.Module, error) {
@@ -102,10 +141,15 @@ func (s *ModuleService) Get(ctx context.Context, workspaceSlug string, projectID
 	if counts, err := s.ms.CountIssuesByModuleIDs(ctx, []uuid.UUID{mod.ID}); err == nil {
 		mod.IssueCount = counts[mod.ID]
 	}
+	ids, err := s.memberIDs(ctx, mod.ID)
+	if err != nil {
+		return nil, err
+	}
+	mod.MemberIDs = ids
 	return mod, nil
 }
 
-func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projectID, moduleID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, targetDate *time.Time, leadIDSet bool, leadID *uuid.UUID) (*model.Module, error) {
+func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projectID, moduleID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, targetDate *time.Time, leadIDSet bool, leadID *uuid.UUID, memberIDsSet bool, memberIDs []uuid.UUID) (*model.Module, error) {
 	mod, err := s.Get(ctx, workspaceSlug, projectID, moduleID, userID)
 	if err != nil {
 		return nil, err
@@ -128,9 +172,22 @@ func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projec
 	if leadIDSet {
 		mod.LeadID = leadID
 	}
-	if err := s.ms.Update(ctx, mod); err != nil {
+	if err := s.ms.Tx(ctx, func(tx *store.ModuleStore) error {
+		if err := tx.Update(ctx, mod); err != nil {
+			return err
+		}
+		if memberIDsSet {
+			return tx.SetMembers(ctx, mod.ID, memberIDs, userID)
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
+	ids, err := s.memberIDs(ctx, mod.ID)
+	if err != nil {
+		return nil, err
+	}
+	mod.MemberIDs = ids
 	return mod, nil
 }
 

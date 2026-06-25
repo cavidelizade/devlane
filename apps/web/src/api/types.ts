@@ -631,6 +631,7 @@ export interface ModuleApiResponse {
   project_id: string;
   workspace_id: string;
   lead_id?: string | null;
+  member_ids?: string[];
   sort_order?: number;
   issue_count?: number;
   created_at: string;

@@ -48,10 +48,14 @@ export function UpdateModuleModal({
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [members, setMembers] = useState<WorkspaceMemberApiResponse[]>([]);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [membersDropdownOpen, setMembersDropdownOpen] = useState(false);
+  const [membersSearch, setMembersSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const leadRef = useRef<HTMLDivElement>(null);
+  const membersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -69,7 +73,10 @@ export function UpdateModuleModal({
     setEndDate(module.target_date ?? null);
     setStatus(module.status ?? 'backlog');
     setLeadId(module.lead_id ?? null);
+    setMemberIds(module.member_ids ?? []);
     setLeadSearch('');
+    setMembersSearch('');
+    setMembersDropdownOpen(false);
     setError(null);
     setDateModalOpen(Boolean(openDatePickerOnOpen));
     setStatusDropdownOpen(false);
@@ -81,8 +88,10 @@ export function UpdateModuleModal({
       const target = e.target as Node;
       if (statusRef.current?.contains(target)) return;
       if (leadRef.current?.contains(target)) return;
+      if (membersRef.current?.contains(target)) return;
       setStatusDropdownOpen(false);
       setLeadDropdownOpen(false);
+      setMembersDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -93,6 +102,12 @@ export function UpdateModuleModal({
     q(m.member_display_name ?? m.member_email ?? m.member_id).includes(q(leadSearch)),
   );
   const leadMember = leadId ? (members.find((m) => m.member_id === leadId) ?? null) : null;
+  const filteredMembers = members.filter((m) =>
+    q(m.member_display_name ?? m.member_email ?? m.member_id).includes(q(membersSearch)),
+  );
+  const selectedMembers = memberIds
+    .map((id) => members.find((m) => m.member_id === id))
+    .filter((m): m is WorkspaceMemberApiResponse => Boolean(m));
 
   const statusLabel = MODULE_STATUSES.find((s) => s.id === status)?.label ?? status;
 
@@ -108,6 +123,7 @@ export function UpdateModuleModal({
         start_date: startDate ?? '',
         target_date: endDate ?? '',
         lead_id: leadId ?? '',
+        member_ids: memberIds,
       });
       onUpdated?.(updated);
       onClose();
@@ -275,6 +291,79 @@ export function UpdateModuleModal({
                         )}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative" ref={membersRef}>
+              <button
+                type="button"
+                onClick={() => setMembersDropdownOpen((v) => !v)}
+                className="flex items-center gap-2 rounded-md border border-(--border-subtle) bg-(--bg-layer-2) px-2.5 py-1 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-2-hover)"
+              >
+                <span>Members</span>
+                {selectedMembers.length > 0 && (
+                  <span className="flex -space-x-1.5">
+                    {selectedMembers.map((m) => (
+                      <Avatar
+                        key={m.member_id}
+                        name={m.member_display_name ?? m.member_email ?? m.member_id}
+                        src={getImageUrl(m.member_avatar) ?? undefined}
+                        size="sm"
+                        className="h-6 w-6 border-2 border-(--bg-layer-2) text-xs"
+                      />
+                    ))}
+                  </span>
+                )}
+                <span className="text-(--txt-icon-tertiary)" aria-hidden>
+                  ▾
+                </span>
+              </button>
+              {membersDropdownOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1 w-64 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) p-1.5 shadow-(--shadow-raised)">
+                  <div className="mb-1.5 flex items-center gap-2 rounded border border-(--border-subtle) bg-(--bg-layer-1) px-2 py-1.5">
+                    <span className="text-(--txt-icon-tertiary)" aria-hidden>
+                      🔎
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Search"
+                      value={membersSearch}
+                      onChange={(e) => setMembersSearch(e.target.value)}
+                      className="min-w-0 flex-1 bg-transparent text-sm text-(--txt-primary) placeholder:text-(--txt-placeholder) focus:outline-none"
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredMembers.map((m) => {
+                      const selected = memberIds.includes(m.member_id);
+                      return (
+                        <button
+                          key={m.member_id}
+                          type="button"
+                          onClick={() =>
+                            setMemberIds(
+                              selected
+                                ? memberIds.filter((id) => id !== m.member_id)
+                                : [...memberIds, m.member_id],
+                            )
+                          }
+                          className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
+                        >
+                          <span className="flex items-center gap-2 truncate">
+                            <Avatar
+                              name={m.member_display_name ?? m.member_email ?? m.member_id}
+                              src={getImageUrl(m.member_avatar) ?? undefined}
+                              size="sm"
+                              className="h-6 w-6 text-xs"
+                            />
+                            {m.member_display_name?.trim() ??
+                              m.member_email ??
+                              m.member_id.slice(0, 8)}
+                          </span>
+                          {selected && <span className="text-(--txt-icon-tertiary)">✓</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

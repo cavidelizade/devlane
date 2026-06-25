@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -24,6 +26,38 @@ func parseOptionalDate(s string) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// parseOptionalUUID parses an optional UUID string field. A nil or empty value
+// yields (nil, true); an invalid value writes a 400 and returns ok=false.
+func parseOptionalUUID(c *gin.Context, s *string, field string) (*uuid.UUID, bool) {
+	if s == nil || *s == "" {
+		return nil, true
+	}
+	id, err := uuid.Parse(*s)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid " + field, "detail": "must be a valid UUID"})
+		return nil, false
+	}
+	return &id, true
+}
+
+// parseUUIDList parses a list of UUID strings; an invalid entry writes a 400 and
+// returns ok=false.
+func parseUUIDList(c *gin.Context, ss []string, field string) ([]uuid.UUID, bool) {
+	out := make([]uuid.UUID, 0, len(ss))
+	for _, s := range ss {
+		if s == "" {
+			continue
+		}
+		id, err := uuid.Parse(s)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid " + field, "detail": "must be valid UUIDs"})
+			return nil, false
+		}
+		out = append(out, id)
+	}
+	return out, true
 }
 
 // List returns modules for the project.
@@ -67,17 +101,27 @@ func (h *ModuleHandler) Create(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		Status      string `json:"status"`
-		StartDate   string `json:"start_date"`
-		TargetDate  string `json:"target_date"`
+		Name        string   `json:"name" binding:"required"`
+		Description string   `json:"description"`
+		Status      string   `json:"status"`
+		StartDate   string   `json:"start_date"`
+		TargetDate  string   `json:"target_date"`
+		LeadID      *string  `json:"lead_id"`
+		MemberIDs   []string `json:"member_ids"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
 		return
 	}
-	mod, err := h.Module.Create(c.Request.Context(), slug, projectID, user.ID, body.Name, body.Description, body.Status, parseOptionalDate(body.StartDate), parseOptionalDate(body.TargetDate))
+	leadIDPtr, ok := parseOptionalUUID(c, body.LeadID, "lead_id")
+	if !ok {
+		return
+	}
+	memberIDs, ok := parseUUIDList(c, body.MemberIDs, "member_ids")
+	if !ok {
+		return
+	}
+	mod, err := h.Module.Create(c.Request.Context(), slug, projectID, user.ID, body.Name, body.Description, body.Status, parseOptionalDate(body.StartDate), parseOptionalDate(body.TargetDate), leadIDPtr, memberIDs)
 	if err != nil {
 		if err == service.ErrProjectForbidden || err == service.ErrProjectNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
@@ -140,26 +184,31 @@ func (h *ModuleHandler) Update(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		Status      string  `json:"status"`
-		StartDate   string  `json:"start_date"`
-		TargetDate  string  `json:"target_date"`
-		LeadID      *string `json:"lead_id"`
+		Name        string    `json:"name"`
+		Description string    `json:"description"`
+		Status      string    `json:"status"`
+		StartDate   string    `json:"start_date"`
+		TargetDate  string    `json:"target_date"`
+		LeadID      *string   `json:"lead_id"`
+		MemberIDs   *[]string `json:"member_ids"`
 	}
-	_ = c.ShouldBindJSON(&body)
-	var leadIDPtr *uuid.UUID
-	if body.LeadID != nil {
-		if *body.LeadID != "" {
-			id, parseErr := uuid.Parse(*body.LeadID)
-			if parseErr != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid lead_id", "detail": "must be a valid UUID"})
-				return
-			}
-			leadIDPtr = &id
+	// An empty PATCH body is allowed (a no-op patch); other parse errors are not.
+	if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
+		return
+	}
+	leadIDPtr, ok := parseOptionalUUID(c, body.LeadID, "lead_id")
+	if !ok {
+		return
+	}
+	var memberIDs []uuid.UUID
+	if body.MemberIDs != nil {
+		memberIDs, ok = parseUUIDList(c, *body.MemberIDs, "member_ids")
+		if !ok {
+			return
 		}
 	}
-	mod, err := h.Module.Update(c.Request.Context(), slug, projectID, moduleID, user.ID, body.Name, body.Description, body.Status, parseOptionalDate(body.StartDate), parseOptionalDate(body.TargetDate), body.LeadID != nil, leadIDPtr)
+	mod, err := h.Module.Update(c.Request.Context(), slug, projectID, moduleID, user.ID, body.Name, body.Description, body.Status, parseOptionalDate(body.StartDate), parseOptionalDate(body.TargetDate), body.LeadID != nil, leadIDPtr, body.MemberIDs != nil, memberIDs)
 	if err != nil {
 		if err == service.ErrModuleNotFound || err == service.ErrProjectForbidden || err == service.ErrProjectNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
