@@ -117,6 +117,12 @@ export function IssueListPage() {
   // latest move's failure triggers a refetch.
   const cardMoveChains = useRef<Map<string, Promise<void>>>(new Map());
   const cardMoveSeq = useRef<Map<string, number>>(new Map());
+  // Latest route key, so a late drag-failure refetch can be discarded if the
+  // user has since navigated to a different project.
+  const routeKeyRef = useRef('');
+  useEffect(() => {
+    routeKeyRef.current = `${workspaceSlug ?? ''}/${projectId ?? ''}`;
+  }, [workspaceSlug, projectId]);
   useDocumentTitle('Work items');
 
   const refetchIssues = () => {
@@ -599,6 +605,7 @@ export function IssueListPage() {
     if (!workspaceSlug || !projectId) return;
     const current = issues.find((i) => i.id === issueId);
     if (!current || current.state_id === targetStateId) return;
+    const routeKey = `${workspaceSlug}/${projectId}`;
     const seq = (cardMoveSeq.current.get(issueId) ?? 0) + 1;
     cardMoveSeq.current.set(issueId, seq);
     setIssues((prev) =>
@@ -612,7 +619,11 @@ export function IssueListPage() {
       )
       .then(() => undefined)
       .catch(() => {
-        if (cardMoveSeq.current.get(issueId) === seq) refetchIssues();
+        // Skip if superseded by a newer move, or if the user navigated to a
+        // different project (the refetch would replace the new route's list).
+        if (cardMoveSeq.current.get(issueId) === seq && routeKeyRef.current === routeKey) {
+          refetchIssues();
+        }
       });
     cardMoveChains.current.set(issueId, next);
   };
