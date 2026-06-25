@@ -230,25 +230,22 @@ func (s *IssueService) Convert(ctx context.Context, workspaceSlug string, projec
 	if issue.IsEpic == toEpic {
 		return issue, nil
 	}
-	if toEpic {
-		issue.ParentID = nil // an epic cannot itself be a child
-	} else {
-		children, err := s.is.ListIssuesByEpicID(ctx, issue.ID)
-		if err != nil {
-			return nil, err
-		}
-		if len(children) > 0 {
-			return nil, ErrEpicHasChildren
-		}
-	}
-	prev := boolStr(issue.IsEpic)
-	issue.IsEpic = toEpic
-	issue.UpdatedByID = &userID
-	if err := s.is.Update(ctx, issue); err != nil {
+	// The demotion guard (no child work items) and the flip happen in one atomic
+	// UPDATE so a concurrent "add child" can't orphan children under a demoted
+	// epic; 0 rows affected on a demote means children still exist.
+	affected, err := s.is.SetIsEpic(ctx, issue.ID, userID, toEpic)
+	if err != nil {
 		return nil, err
 	}
-	s.recordActivity(ctx, issue, userID, "is_epic", prev, boolStr(toEpic))
-	return issue, nil
+	if affected == 0 {
+		return nil, ErrEpicHasChildren
+	}
+	updated, err := s.is.GetByID(ctx, issue.ID)
+	if err != nil {
+		return nil, err
+	}
+	s.recordActivity(ctx, updated, userID, "is_epic", boolStr(!toEpic), boolStr(toEpic))
+	return updated, nil
 }
 
 func boolStr(b bool) string {

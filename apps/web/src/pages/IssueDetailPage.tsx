@@ -1804,6 +1804,20 @@ export function IssueDetailPage() {
                       )}
                     </button>
                   ))}
+                  {!issue.is_epic && (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 border-t border-(--border-subtle) px-3 py-2 text-left text-sm hover:bg-(--bg-layer-1-hover)"
+                      onClick={() => {
+                        setOpenDropdown(null);
+                        void handleConvertToEpic();
+                      }}
+                    >
+                      <Layers className="size-3.5 text-(--txt-icon-tertiary)" />
+                      <span className="text-(--txt-primary)">Epic</span>
+                      <span className="ml-auto text-xs text-(--txt-tertiary)">Convert</span>
+                    </button>
+                  )}
                 </Dropdown>
               </PropertyRow>
 
