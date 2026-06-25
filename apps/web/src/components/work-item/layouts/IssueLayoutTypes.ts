@@ -42,4 +42,49 @@ export interface IssueLayoutProps {
   issueHref: (id: string) => string;
   /** Stable per-render "now" timestamp (ms) used by date cells. */
   now: number;
+  /**
+   * Optional map of project id -> project, used by workspace-wide views where
+   * issues span multiple projects so each card can show its own project's
+   * identifier. When omitted, the single `project` prop is used.
+   */
+  projectsById?: Record<string, ProjectApiResponse>;
+  /**
+   * Board layout only: group columns by canonical state group (Backlog / Todo /
+   * In Progress / Done / Cancelled) instead of by individual state. Used by
+   * workspace-wide views where states differ per project but share groups.
+   */
+  groupByStateGroup?: boolean;
+}
+
+/** Canonical state groups, in board column order. */
+export const STATE_GROUP_ORDER = [
+  'backlog',
+  'unstarted',
+  'started',
+  'completed',
+  'cancelled',
+] as const;
+
+/** Display labels for the canonical state groups. */
+export const STATE_GROUP_LABELS: Record<string, string> = {
+  backlog: 'Backlog',
+  unstarted: 'Todo',
+  started: 'In Progress',
+  completed: 'Done',
+  cancelled: 'Cancelled',
+};
+
+/**
+ * The human "DEV-42" identifier for an issue. In multi-project (workspace)
+ * views the issue's own project is resolved from `projectsById`; otherwise the
+ * single `project` is used.
+ */
+export function issueDisplayId(
+  issue: Pick<IssueApiResponse, 'id' | 'project_id' | 'sequence_id'>,
+  project: ProjectApiResponse,
+  projectsById?: Record<string, ProjectApiResponse>,
+): string {
+  const p = projectsById?.[issue.project_id] ?? project;
+  const prefix = p.identifier ?? p.id.slice(0, 8);
+  return `${prefix}-${issue.sequence_id ?? issue.id.slice(-4)}`;
 }

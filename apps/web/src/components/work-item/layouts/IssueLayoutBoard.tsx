@@ -11,7 +11,12 @@ import {
 import { membersFromAssigneeIds } from '../../../lib/issueRowHelpers';
 import type { IssueApiResponse, LabelApiResponse } from '../../../api/types';
 import type { Priority } from '../../../types';
-import type { IssueLayoutProps } from './IssueLayoutTypes';
+import {
+  issueDisplayId,
+  STATE_GROUP_LABELS,
+  STATE_GROUP_ORDER,
+  type IssueLayoutProps,
+} from './IssueLayoutTypes';
 
 /**
  * Kanban board grouped by state. One column per state, ordered by `sequence`,
@@ -29,20 +34,48 @@ export function IssueLayoutBoard({
   prSummary,
   issueHref,
   now,
+  projectsById,
+  groupByStateGroup,
 }: IssueLayoutProps) {
   const labelById = useMemo(() => new Map(labels.map((l) => [l.id, l])), [labels]);
-  const orderedStates = useMemo(
-    () =>
-      [...states].sort(
-        (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.name.localeCompare(b.name),
-      ),
-    [states],
-  );
+  const stateById = useMemo(() => new Map(states.map((s) => [s.id, s])), [states]);
 
-  const groups = useMemo(() => {
+  // Build the columns + the leftover "No state" bucket. In group mode columns
+  // are the canonical state groups present in the workspace (so a multi-project
+  // board doesn't repeat "Todo/In Progress/Done" once per project); otherwise
+  // one column per individual state.
+  const { columns, orphans } = useMemo(() => {
+    const orphans: IssueApiResponse[] = [];
+
+    if (groupByStateGroup) {
+      const buckets = new Map<string, IssueApiResponse[]>();
+      for (const issue of issues) {
+        const group = issue.state_id ? stateById.get(issue.state_id)?.group : undefined;
+        if (group && STATE_GROUP_ORDER.includes(group as (typeof STATE_GROUP_ORDER)[number])) {
+          const arr = buckets.get(group) ?? [];
+          arr.push(issue);
+          buckets.set(group, arr);
+        } else {
+          orphans.push(issue);
+        }
+      }
+      const presentGroups = new Set(states.map((s) => s.group).filter(Boolean) as string[]);
+      const columns = STATE_GROUP_ORDER.filter(
+        (g) => presentGroups.has(g) || (buckets.get(g)?.length ?? 0) > 0,
+      ).map((g) => ({
+        key: g,
+        title: STATE_GROUP_LABELS[g] ?? g,
+        color: undefined as string | undefined,
+        items: buckets.get(g) ?? [],
+      }));
+      return { columns, orphans };
+    }
+
+    const orderedStates = [...states].sort(
+      (a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.name.localeCompare(b.name),
+    );
     const buckets = new Map<string, IssueApiResponse[]>();
     for (const s of orderedStates) buckets.set(s.id, []);
-    const orphans: IssueApiResponse[] = [];
     for (const issue of issues) {
       if (issue.state_id && buckets.has(issue.state_id)) {
         buckets.get(issue.state_id)!.push(issue);
@@ -50,59 +83,46 @@ export function IssueLayoutBoard({
         orphans.push(issue);
       }
     }
-    return { buckets, orphans };
-  }, [orderedStates, issues]);
+    const columns = orderedStates.map((s) => ({
+      key: s.id,
+      title: s.name,
+      color: s.color ?? undefined,
+      items: buckets.get(s.id) ?? [],
+    }));
+    return { columns, orphans };
+  }, [groupByStateGroup, states, issues, stateById]);
+
+  const renderCard = (issue: IssueApiResponse) => (
+    <BoardCard
+      key={issue.id}
+      issue={issue}
+      project={project}
+      projectsById={projectsById}
+      state={issue.state_id ? (stateById.get(issue.state_id) ?? null) : null}
+      labels={(issue.label_ids ?? [])
+        .map((id) => labelById.get(id))
+        .filter((l): l is LabelApiResponse => Boolean(l))}
+      assignees={membersFromAssigneeIds(members, issue.assignee_ids ?? [])}
+      prSummary={prSummary[issue.id]}
+      href={issueHref(issue.id)}
+      now={now}
+    />
+  );
 
   return (
     <div className="flex gap-3 overflow-x-auto px-4 py-4">
-      {orderedStates.map((state) => {
-        const colIssues = groups.buckets.get(state.id) ?? [];
-        return (
-          <BoardColumn
-            key={state.id}
-            title={state.name}
-            color={state.color}
-            count={colIssues.length}
-          >
-            {colIssues.map((issue) => (
-              <BoardCard
-                key={issue.id}
-                issue={issue}
-                project={project}
-                state={state}
-                labels={(issue.label_ids ?? [])
-                  .map((id) => labelById.get(id))
-                  .filter((l): l is LabelApiResponse => Boolean(l))}
-                assignees={membersFromAssigneeIds(members, issue.assignee_ids ?? [])}
-                prSummary={prSummary[issue.id]}
-                href={issueHref(issue.id)}
-                now={now}
-              />
-            ))}
-            {colIssues.length === 0 && (
-              <p className="px-2 py-6 text-center text-xs text-(--txt-tertiary)">No work items</p>
-            )}
-          </BoardColumn>
-        );
-      })}
+      {columns.map((col) => (
+        <BoardColumn key={col.key} title={col.title} color={col.color} count={col.items.length}>
+          {col.items.map(renderCard)}
+          {col.items.length === 0 && (
+            <p className="px-2 py-6 text-center text-xs text-(--txt-tertiary)">No work items</p>
+          )}
+        </BoardColumn>
+      ))}
 
-      {groups.orphans.length > 0 && (
-        <BoardColumn title="No state" color={undefined} count={groups.orphans.length}>
-          {groups.orphans.map((issue) => (
-            <BoardCard
-              key={issue.id}
-              issue={issue}
-              project={project}
-              state={null}
-              labels={(issue.label_ids ?? [])
-                .map((id) => labelById.get(id))
-                .filter((l): l is LabelApiResponse => Boolean(l))}
-              assignees={membersFromAssigneeIds(members, issue.assignee_ids ?? [])}
-              prSummary={prSummary[issue.id]}
-              href={issueHref(issue.id)}
-              now={now}
-            />
-          ))}
+      {orphans.length > 0 && (
+        <BoardColumn title="No state" color={undefined} count={orphans.length}>
+          {orphans.map(renderCard)}
         </BoardColumn>
       )}
     </div>
@@ -142,6 +162,7 @@ function BoardColumn({
 interface BoardCardProps {
   issue: IssueApiResponse;
   project: IssueLayoutProps['project'];
+  projectsById?: IssueLayoutProps['projectsById'];
   state: IssueLayoutProps['states'][number] | null;
   labels: LabelApiResponse[];
   assignees: ReturnType<typeof membersFromAssigneeIds>;
@@ -153,6 +174,7 @@ interface BoardCardProps {
 function BoardCard({
   issue,
   project,
+  projectsById,
   state,
   labels,
   assignees,
@@ -160,7 +182,7 @@ function BoardCard({
   href,
   now,
 }: BoardCardProps) {
-  const displayId = `${project.identifier ?? project.id.slice(0, 8)}-${issue.sequence_id ?? issue.id.slice(-4)}`;
+  const displayId = issueDisplayId(issue, project, projectsById);
   return (
     <Link
       to={href}
