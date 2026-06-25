@@ -10,6 +10,7 @@ import { StickyNoteCard } from '../components/stickies/StickyNoteCard';
 import { pickRandomStickyBackground } from '../components/stickies/stickyPalette';
 import { OPEN_HOME_WIDGETS } from '../lib/homeWidgetsEvents';
 import { recentsService } from '../services/recentsService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -613,6 +614,8 @@ export function WorkspaceHomePage() {
   const [widgets, setWidgets] = useState<HomeWidget[]>(DEFAULT_HOME_WIDGETS);
   const [draggingWidgetId, setDraggingWidgetId] = useState<HomeWidgetId | null>(null);
   const [widgetsHydrated, setWidgetsHydrated] = useState(false);
+
+  useDocumentTitle('Home');
 
   const widgetsStorageKey = workspaceSlug ? `devlane:home-widgets:${workspaceSlug}` : '';
 

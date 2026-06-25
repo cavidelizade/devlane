@@ -4,6 +4,7 @@ import { Button, Skeleton } from '../../components/ui';
 import { workspaceService } from '../../services/workspaceService';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceGeneralSection } from '../../api/types';
 
 export function InstanceAdminWorkspacePage() {
@@ -16,6 +17,7 @@ export function InstanceAdminWorkspacePage() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useDocumentTitle('Workspaces');
 
   useEffect(() => {
     let cancelled = false;

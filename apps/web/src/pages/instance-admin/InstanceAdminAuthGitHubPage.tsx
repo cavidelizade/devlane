@@ -7,6 +7,7 @@ import { authService } from '../../services/authService';
 import { getApiErrorMessage } from '../../api/client';
 import type { InstanceAuthSection, InstanceOAuthSection } from '../../api/types';
 import { Eye, EyeOff } from 'lucide-react';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const IconGitHub = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -33,6 +34,7 @@ export function InstanceAdminAuthGitHubPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  useDocumentTitle('GitHub authentication');
 
   useEffect(() => {
     let cancelled = false;

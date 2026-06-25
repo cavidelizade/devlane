@@ -1,7 +1,9 @@
 import { useParams } from 'react-router-dom';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export function ArchivesPage() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  useDocumentTitle('Archives');
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-8">
       <h1 className="text-2xl font-semibold text-(--txt-primary)">Archives</h1>

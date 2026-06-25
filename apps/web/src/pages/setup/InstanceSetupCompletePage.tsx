@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent } from '../../components/ui';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const IconWorkspace = () => (
   <svg
@@ -21,6 +22,7 @@ const IconWorkspace = () => (
 
 export function InstanceSetupCompletePage() {
   const navigate = useNavigate();
+  useDocumentTitle('Setup complete');
 
   const handleCreateWorkspace = () => {
     navigate('/instance-admin/workspace/create', {

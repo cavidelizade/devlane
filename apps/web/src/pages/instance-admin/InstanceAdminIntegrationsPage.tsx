@@ -4,6 +4,7 @@ import { Settings2 } from 'lucide-react';
 import { Skeleton } from '../../components/ui';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceGitHubAppSection } from '../../api/types';
 
 const IconGitHub = () => (
@@ -36,6 +37,7 @@ export function InstanceAdminIntegrationsPage() {
   const [github, setGithub] = useState<InstanceGitHubAppSection>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  useDocumentTitle('Integrations');
 
   useEffect(() => {
     let cancelled = false;

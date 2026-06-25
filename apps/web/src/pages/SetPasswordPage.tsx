@@ -6,6 +6,7 @@ import { authService } from '../services/authService';
 import { getApiErrorMessage } from '../api/client';
 import { Eye, EyeOff, CircleAlert, CircleCheck } from 'lucide-react';
 import { AuthPageShell } from '../components/auth/AuthPageShell';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface PasswordCriteria {
   minLength: boolean;
@@ -73,6 +74,8 @@ export function SetPasswordPage() {
     () => confirmPassword.length > 0 && password === confirmPassword,
     [password, confirmPassword],
   );
+
+  useDocumentTitle('Set password');
 
   const isDisabled = !isPasswordStrong(password) || !passwordsMatch || isSubmitting;
 

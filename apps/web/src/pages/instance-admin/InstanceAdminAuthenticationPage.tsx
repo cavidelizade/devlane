@@ -5,6 +5,7 @@ import { Skeleton } from '../../components/ui';
 import { InstanceAdminToggleSwitch } from '../../components/instance-admin';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceAuthSection, InstanceOAuthSection } from '../../api/types';
 
 const IconEnvelope = () => (
@@ -157,6 +158,7 @@ export function InstanceAdminAuthenticationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useDocumentTitle('Authentication');
 
   useEffect(() => {
     let cancelled = false;

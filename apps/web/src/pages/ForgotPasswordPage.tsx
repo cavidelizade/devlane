@@ -5,6 +5,7 @@ import { authService } from '../services/authService';
 import { getApiErrorMessage } from '../api/client';
 import { CircleAlert, CircleCheck, ArrowLeft } from 'lucide-react';
 import { AuthPageShell } from '../components/auth/AuthPageShell';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -17,6 +18,8 @@ export function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+
+  useDocumentTitle('Forgot password');
 
   useEffect(() => {
     if (cooldown <= 0) return;

@@ -3,6 +3,7 @@ import { Avatar, Button, Modal, Skeleton } from '../../components/ui';
 import { instanceAdminService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceAdminApiResponse } from '../../api/types';
 
 export function InstanceAdminAdminsPage() {
@@ -14,6 +15,7 @@ export function InstanceAdminAdminsPage() {
   const [adding, setAdding] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [removing, setRemoving] = useState(false);
+  useDocumentTitle('Admins');
 
   useEffect(() => {
     let cancelled = false;

@@ -41,6 +41,7 @@ import {
   type ModuleWorkItemsFiltersState,
 } from '../lib/moduleWorkItemsPrefs';
 import { applyModuleSubWorkFilter, filterModuleIssues } from '../lib/moduleWorkItemsApply';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const priorityVariant: Record<Priority, 'danger' | 'warning' | 'default' | 'neutral'> = {
   urgent: 'danger',
@@ -203,6 +204,8 @@ export function ModuleDetailPage() {
   const [listDisplay, setListDisplay] = useState<ProjectIssuesDisplayState>(() =>
     cloneDefaultProjectIssuesDisplay(),
   );
+
+  useDocumentTitle(loading ? 'Module' : (module?.name ?? 'Module'));
 
   const createParam = searchParams.get('create') === '1';
 

@@ -28,6 +28,7 @@ import {
 } from '../components/work-item/IssueRowCells';
 import { membersFromAssigneeIds } from '../lib/issueRowHelpers';
 import { getImageUrl } from '../lib/utils';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -318,6 +319,8 @@ export function IssueDetailPage() {
   // Attachments
   const [attachments, setAttachments] = useState<IssueAttachmentApiResponse[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  useDocumentTitle(loading ? 'Work item' : (issue?.name ?? 'Work item'));
 
   useEffect(() => {
     if (!workspaceSlug || !projectId || !issueId) {

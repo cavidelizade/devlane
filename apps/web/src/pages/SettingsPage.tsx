@@ -16,6 +16,7 @@ import { labelService } from '../services/labelService';
 import { stateService } from '../services/stateService';
 import { userService } from '../services/userService';
 import { authService } from '../services/authService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   LabelApiResponse,
   ProjectApiResponse,
@@ -719,6 +720,8 @@ export function SettingsPage() {
   const [projectMembers, setProjectMembers] = useState<ProjectMemberApiResponse[]>([]);
   const [projectLabels, setProjectLabels] = useState<LabelApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useDocumentTitle('Settings');
 
   useEffect(() => {
     if (!workspaceSlug) {

@@ -11,6 +11,7 @@ import { useFavorites } from '../contexts/FavoritesContext';
 import { useAuth } from '../contexts/AuthContext';
 import { parseISODateLocal } from '../lib/dateOnly';
 import { parseProjectsListSearchParams } from '../lib/projectsListSearchParams';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type { WorkspaceApiResponse, ProjectApiResponse } from '../api/types';
 
 const MAX_AVATARS = 3;
@@ -81,6 +82,9 @@ export function ProjectsListPage() {
     {},
   );
   const [loading, setLoading] = useState(true);
+
+  useDocumentTitle('Projects');
+
   const createProjectOpen = searchParams.get('createProject') === '1';
 
   const closeCreateModal = () => {

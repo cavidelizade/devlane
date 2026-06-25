@@ -6,6 +6,7 @@ import { authService } from '../services/authService';
 import { API_BASE, getApiErrorMessage } from '../api/client';
 import { Eye, EyeOff, CircleAlert, CircleCheck } from 'lucide-react';
 import { AuthPageShell } from '../components/auth/AuthPageShell';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 type AuthStep = 'email' | 'password' | 'code';
 
@@ -102,6 +103,8 @@ export function SignUpPage() {
     github: false,
     gitlab: false,
   });
+
+  useDocumentTitle('Sign up');
 
   useEffect(() => {
     if (oauthError) {

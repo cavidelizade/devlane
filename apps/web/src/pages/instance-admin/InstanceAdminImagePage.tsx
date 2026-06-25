@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, IconEye, IconEyeOff, Skeleton } from '../../components/ui';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceImageSection } from '../../api/types';
 
 export function InstanceAdminImagePage() {
@@ -13,6 +14,7 @@ export function InstanceAdminImagePage() {
   const [showAccessKey, setShowAccessKey] = useState(false);
   const [accessKeyLocal, setAccessKeyLocal] = useState<string | undefined>(undefined);
   const [error, setError] = useState('');
+  useDocumentTitle('Images');
 
   const accessKeyDisplay =
     accessKeyLocal !== undefined ? accessKeyLocal : (image.unsplash_access_key ?? '');

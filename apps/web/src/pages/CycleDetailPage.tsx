@@ -7,6 +7,7 @@ import { cycleService, type CycleProgressResponse } from '../services/cycleServi
 import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
 import { cycleMatchesPathSegment } from '../lib/cycle';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   CycleApiResponse,
   IssueApiResponse,
@@ -109,6 +110,8 @@ export function CycleDetailPage() {
   const [issues, setIssues] = useState<IssueApiResponse[]>([]);
   const [states, setStates] = useState<StateApiResponse[]>([]);
   const [progress, setProgress] = useState<CycleProgressResponse | null>(null);
+
+  useDocumentTitle(loading ? 'Cycle' : (cycle?.name ?? 'Cycle'));
 
   useEffect(() => {
     if (!workspaceSlug || !projectId || !cycleId) return;

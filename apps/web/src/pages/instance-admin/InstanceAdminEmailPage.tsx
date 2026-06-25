@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, IconEye, IconEyeOff, Skeleton } from '../../components/ui';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceEmailSection } from '../../api/types';
 
 export function InstanceAdminEmailPage() {
@@ -18,6 +19,7 @@ export function InstanceAdminEmailPage() {
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [smtpPasswordLocal, setSmtpPasswordLocal] = useState<string | undefined>(undefined); // undefined = show stored mask, '' = user cleared, string = user typed
   const [error, setError] = useState('');
+  useDocumentTitle('Email');
 
   const smtpPasswordDisplay =
     smtpPasswordLocal !== undefined ? smtpPasswordLocal : (email.password ?? '');

@@ -1,4 +1,5 @@
 import { Navigate, useParams } from 'react-router-dom';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 /**
  * Legacy `/board` route. The kanban now renders inside the issues page via
@@ -10,6 +11,7 @@ export function BoardPage() {
     workspaceSlug: string;
     projectId: string;
   }>();
+  useDocumentTitle('Board');
   if (!workspaceSlug || !projectId) {
     return <Navigate to="/" replace />;
   }

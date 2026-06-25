@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, IconEye, IconEyeOff, Skeleton } from '../../components/ui';
 import { instanceSettingsService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceAISection } from '../../api/types';
 
 export function InstanceAdminAIPage() {
@@ -14,6 +15,7 @@ export function InstanceAdminAIPage() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKeyLocal, setApiKeyLocal] = useState<string | undefined>(undefined);
   const [error, setError] = useState('');
+  useDocumentTitle('Artificial intelligence');
 
   const apiKeyDisplay = apiKeyLocal !== undefined ? apiKeyLocal : (ai.api_key ?? '');
 

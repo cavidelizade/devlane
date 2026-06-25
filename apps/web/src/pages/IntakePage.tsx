@@ -4,6 +4,7 @@ import { Badge } from '../components/ui';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { issueService } from '../services/issueService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type { IssueApiResponse, ProjectApiResponse, WorkspaceApiResponse } from '../api/types';
 import type { Priority } from '../types';
 
@@ -24,6 +25,7 @@ export function IntakePage() {
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState<string | null>(null);
+  useDocumentTitle('Intake');
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;

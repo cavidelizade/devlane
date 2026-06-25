@@ -18,6 +18,7 @@ import { findWorkspaceMemberByUserId, getImageUrl } from '../lib/utils';
 import { slugify } from '../lib/slug';
 import { parseISODateLocal } from '../lib/dateOnly';
 import { MODULE_STATUSES } from '../lib/moduleStatuses';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -179,6 +180,7 @@ export function ModulesPage() {
     workspaceSlug,
     projectId,
   );
+  useDocumentTitle('Modules');
 
   const searchQuery = (filter.search ?? '').trim().toLowerCase();
   const favoritesFilter = filter.favorites;

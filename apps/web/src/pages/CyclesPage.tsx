@@ -26,6 +26,7 @@ import { useCycleFavorites } from '../hooks/useCycleFavorites';
 import { parseISODateForDisplay, parseISODateLocal } from '../lib/dateOnly';
 import { cyclePathSegment } from '../lib/cycle';
 import { cn, getImageUrl } from '../lib/utils';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -335,6 +336,7 @@ export function CyclesPage() {
     dueAfter: null,
     dueBefore: null,
   });
+  useDocumentTitle('Cycles');
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) {

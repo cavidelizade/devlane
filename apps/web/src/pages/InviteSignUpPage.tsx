@@ -4,6 +4,7 @@ import { Card, CardContent, Button } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { workspaceService } from '../services/workspaceService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const IconGlobe = () => (
   <svg
@@ -134,6 +135,8 @@ export function InviteSignUpPage() {
   const req = usePasswordRequirements(password);
   const allMet = req.minLength && req.upper && req.lower && req.number && req.special;
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  useDocumentTitle('Sign up');
 
   useEffect(() => {
     if (!email || !token) {
