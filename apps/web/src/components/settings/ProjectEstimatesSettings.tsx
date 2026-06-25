@@ -92,8 +92,14 @@ function EstimateModal({ open, onClose, initial, onSubmit }: EstimateModalProps)
           autoFocus
         />
         <div>
-          <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Type</label>
+          <label
+            htmlFor="estimate-type"
+            className="mb-1 block text-sm font-medium text-(--txt-secondary)"
+          >
+            Type
+          </label>
           <select
+            id="estimate-type"
             value={type}
             onChange={(e) => setType(e.target.value)}
             className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:border-(--border-strong) focus:outline-none"
@@ -105,8 +111,8 @@ function EstimateModal({ open, onClose, initial, onSubmit }: EstimateModalProps)
             ))}
           </select>
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Points</label>
+        <fieldset className="min-w-0">
+          <legend className="mb-1 block text-sm font-medium text-(--txt-secondary)">Points</legend>
           <div className="space-y-2">
             {points.map((p, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -137,7 +143,7 @@ function EstimateModal({ open, onClose, initial, onSubmit }: EstimateModalProps)
           >
             <Plus className="size-3.5" /> Add point
           </button>
-        </div>
+        </fieldset>
         <label className="flex items-center gap-2 text-sm text-(--txt-secondary)">
           <input
             type="checkbox"

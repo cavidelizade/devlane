@@ -96,12 +96,25 @@ func (s *EstimateService) Get(ctx context.Context, workspaceSlug string, project
 	if err != nil || e.ProjectID != projectID {
 		return nil, ErrEstimateNotFound
 	}
-	pts, err := s.es.ListPointsByEstimateID(ctx, e.ID)
+	pts, err := s.points(ctx, e.ID)
 	if err != nil {
 		return nil, err
 	}
 	e.Points = pts
 	return e, nil
+}
+
+// points returns an estimate's points as a non-nil slice so the JSON response
+// always renders an array rather than null.
+func (s *EstimateService) points(ctx context.Context, estimateID uuid.UUID) ([]model.EstimatePoint, error) {
+	pts, err := s.es.ListPointsByEstimateID(ctx, estimateID)
+	if err != nil {
+		return nil, err
+	}
+	if pts == nil {
+		return []model.EstimatePoint{}, nil
+	}
+	return pts, nil
 }
 
 func (s *EstimateService) Create(ctx context.Context, workspaceSlug string, projectID, userID uuid.UUID, name, description, etype string, lastUsed bool, points []EstimatePointInput) (*model.Estimate, error) {
@@ -133,7 +146,7 @@ func (s *EstimateService) Create(ctx context.Context, workspaceSlug string, proj
 			return nil, err
 		}
 	}
-	pts, err := s.es.ListPointsByEstimateID(ctx, e.ID)
+	pts, err := s.points(ctx, e.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +185,7 @@ func (s *EstimateService) Update(ctx context.Context, workspaceSlug string, proj
 			return nil, err
 		}
 	}
-	pts, err := s.es.ListPointsByEstimateID(ctx, e.ID)
+	pts, err := s.points(ctx, e.ID)
 	if err != nil {
 		return nil, err
 	}
