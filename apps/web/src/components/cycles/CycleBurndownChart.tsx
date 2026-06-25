@@ -70,7 +70,13 @@ export function CycleBurndownChart({
         day,
         // Only plot the actual line up to (and including) today.
         pending: day <= today ? remaining : null,
-        ideal: ranged ? Math.round(((total * (lastIdx - i)) / lastIdx) * 10) / 10 : null,
+        // Ideal line from total -> 0; a single-day cycle (lastIdx === 0) has no
+        // slope, so anchor it at 0 to avoid dividing by zero.
+        ideal: ranged
+          ? lastIdx > 0
+            ? Math.round(((total * (lastIdx - i)) / lastIdx) * 10) / 10
+            : 0
+          : null,
       };
     });
   }, [completionChart, total, startDate, endDate]);

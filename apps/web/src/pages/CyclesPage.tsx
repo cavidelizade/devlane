@@ -584,10 +584,13 @@ export function CyclesPage() {
       cancelled = true;
     };
   }, [workspaceSlug, projectId, activeCycleId]);
-  const activeBurndownChart =
+  // Both the burndown total and the per-day completions must come from the same
+  // (progress endpoint) source so the baseline matches the curve.
+  const activeProgress =
     activeCycleProgress && activeCycleId && activeCycleProgress.cycleId === activeCycleId
-      ? activeCycleProgress.progress.distribution?.completion_chart
-      : undefined;
+      ? activeCycleProgress.progress
+      : null;
+  const activeBurndownChart = activeProgress?.distribution?.completion_chart;
 
   const getIssueCount = (cycleId: string) => cycles.find((c) => c.id === cycleId)?.issue_count ?? 0;
   const getProgress = (c: CycleApiResponse) => {
@@ -637,6 +640,10 @@ export function CyclesPage() {
     const percentClosed = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { started, backlog, completed, total, percentClosed };
   })();
+
+  // Burndown baseline: prefer the progress endpoint's total (same source as the
+  // completion chart), falling back to the client-side count before it loads.
+  const activeBurndownTotal = activeProgress?.total_issues ?? activeCycleProgressStats.total;
 
   const activeCycleAssigneeStats = (() => {
     if (!activeCycle) return [];
@@ -1122,7 +1129,7 @@ export function CyclesPage() {
                   <div className="mt-4">
                     <CycleBurndownChart
                       completionChart={activeBurndownChart ?? {}}
-                      total={activeCycleProgressStats.total}
+                      total={activeBurndownTotal}
                       startDate={activeCycle.start_date}
                       endDate={activeCycle.end_date}
                     />
