@@ -10,6 +10,7 @@ import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
 import { labelService } from '../services/labelService';
 import { viewService } from '../services/viewService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -164,6 +165,8 @@ export function WorkspaceViewsPage() {
   const [members, setMembers] = useState<WorkspaceMemberApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const { user: currentUser } = useAuth();
+
+  useDocumentTitle('Views');
 
   // When viewing a saved view, fetch it and apply its filters/display to state once (not driven by URL).
   useEffect(() => {

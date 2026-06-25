@@ -28,6 +28,7 @@ import type { Priority } from '../types';
 import type { SavedViewDisplayPropertyId, SavedViewOrderBy } from '../lib/projectSavedViewDisplay';
 import { getImageUrl } from '../lib/utils';
 import { parseWorkspaceViewFiltersFromSearchParams } from '../types/workspaceViewFilters';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const priorityVariant: Record<Priority, 'danger' | 'warning' | 'default' | 'neutral'> = {
   urgent: 'danger',
@@ -216,6 +217,8 @@ export function ViewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useDocumentTitle(view?.name ?? 'View');
 
   const refetchIssues = () => {
     if (!workspaceSlug || !projectId) return;

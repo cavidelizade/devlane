@@ -27,6 +27,7 @@ import { pageService } from '../services/pageService';
 import { useAuth } from '../contexts/AuthContext';
 import { cn, getImageUrl } from '../lib/utils';
 import { PROJECT_PAGES_CREATE_EVENT } from '../lib/projectPagesEvents';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   PageApiResponse,
   ProjectApiResponse,
@@ -99,6 +100,7 @@ export function PagesPage() {
   const filterRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  useDocumentTitle('Pages');
 
   // ----- Initial load ------------------------------------------------------
   useEffect(() => {

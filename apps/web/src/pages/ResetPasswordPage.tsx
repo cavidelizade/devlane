@@ -5,6 +5,7 @@ import { authService } from '../services/authService';
 import { Eye, EyeOff, CircleAlert, CircleCheck } from 'lucide-react';
 import { AuthPageShell } from '../components/auth/AuthPageShell';
 import { getApiErrorMessage } from '../api/client';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface PasswordCriteria {
   minLength: boolean;
@@ -75,6 +76,8 @@ export function ResetPasswordPage() {
     () => confirmPassword.length > 0 && password === confirmPassword,
     [password, confirmPassword],
   );
+
+  useDocumentTitle('Reset password');
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {

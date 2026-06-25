@@ -8,6 +8,7 @@ import { EpicProgressBar } from '../components/work-item/EpicProgressBar';
 import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
 import { safeUrl } from '../lib/sanitize';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   IssueLinkApiResponse,
   IssueApiResponse,
@@ -47,6 +48,8 @@ export function EpicDetailPage() {
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkTitle, setAddLinkTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useDocumentTitle(epic?.name ?? 'Epic');
 
   useEffect(() => {
     if (!workspaceSlug || !projectId || !epicId) return;

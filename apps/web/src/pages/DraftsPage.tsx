@@ -11,6 +11,7 @@ import { cycleService } from '../services/cycleService';
 import { moduleService } from '../services/moduleService';
 import { stateService } from '../services/stateService';
 import { labelService } from '../services/labelService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -110,6 +111,8 @@ export function DraftsPage() {
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [propDropdownId, setPropDropdownId] = useState<string | null>(null);
+
+  useDocumentTitle('Drafts');
 
   const projectById = useMemo(() => {
     const m = new Map<string, ProjectApiResponse>();

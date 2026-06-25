@@ -6,6 +6,7 @@ import { workspaceService } from '../services/workspaceService';
 import { getApiErrorMessage } from '../api/client';
 import { slugFromName, validateWorkspaceSlug } from '../utils/workspace';
 import { ORGANIZATION_SIZE_OPTIONS } from '../constants/workspace';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const IconChevronDown = () => (
   <svg
@@ -31,6 +32,8 @@ export function CreateWorkspacePage() {
   const [organizationSize, setOrganizationSize] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useDocumentTitle('Create workspace');
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '';
 

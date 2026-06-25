@@ -4,6 +4,7 @@ import { Button, Input } from '../../components/ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { instanceService } from '../../services/instanceService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const LogoMark = () => (
   <span
@@ -121,6 +122,7 @@ export function InstanceSetupConfigurePage() {
   const [allowUsageData, setAllowUsageData] = useState(true);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  useDocumentTitle('Configure your instance');
 
   const req = usePasswordRequirements(password);
   const allMet = req.minLength && req.upper && req.lower && req.number && req.special;

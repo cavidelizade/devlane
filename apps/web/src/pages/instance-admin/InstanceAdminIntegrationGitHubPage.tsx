@@ -6,6 +6,7 @@ import { InstanceAdminCopyRow } from '../../components/instance-admin';
 import { instanceSettingsService } from '../../services/instanceService';
 import { authService } from '../../services/authService';
 import { getApiErrorMessage } from '../../api/client';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import type { InstanceGitHubAppSection } from '../../api/types';
 
 const IconGitHub = () => (
@@ -54,6 +55,7 @@ export function InstanceAdminIntegrationGitHubPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  useDocumentTitle('GitHub integration');
 
   const callbackUrl = useMemo(
     () => (oauthRedirectBase ? `${oauthRedirectBase}/auth/github-app/callback` : ''),

@@ -44,6 +44,7 @@ import {
   type ProjectIssuesFiltersState,
 } from '../lib/projectIssuesEvents';
 import { normalizeUuidKey } from '../lib/utils';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 function issueMentionSearchBlob(issue: IssueApiResponse): string {
   const parts: string[] = [];
@@ -109,6 +110,7 @@ export function IssueListPage() {
   const [listDisplay, setListDisplay] = useState<ProjectIssuesDisplayState>(() =>
     cloneDefaultProjectIssuesDisplay(),
   );
+  useDocumentTitle('Work items');
 
   const refetchIssues = () => {
     if (!workspaceSlug || !projectId) return;

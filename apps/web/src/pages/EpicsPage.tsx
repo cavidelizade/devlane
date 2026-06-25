@@ -6,6 +6,7 @@ import { projectService } from '../services/projectService';
 import { epicService, type EpicProgress } from '../services/epicService';
 import { stateService } from '../services/stateService';
 import { EpicProgressBar } from '../components/work-item/EpicProgressBar';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   IssueApiResponse,
   ProjectApiResponse,
@@ -25,6 +26,7 @@ export function EpicsPage() {
   const [createName, setCreateName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useDocumentTitle('Epics');
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;

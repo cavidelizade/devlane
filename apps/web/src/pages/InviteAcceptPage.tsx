@@ -4,6 +4,7 @@ import { Card, CardContent, Button } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { invitationService } from '../services/invitationService';
 import { workspaceService } from '../services/workspaceService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const IconCheck = () => (
   <svg
@@ -109,6 +110,8 @@ export function InviteAcceptPage() {
   const [step, setStep] = useState<'invite' | 'join'>('invite');
   const [joinEmail, setJoinEmail] = useState('');
   const autoAcceptDone = useRef(false);
+
+  useDocumentTitle('Accept invite');
 
   useEffect(() => {
     if (!token.trim()) {

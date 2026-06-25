@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 /** Devlane logo mark: blue square with white star */
 const LogoMark = () => (
@@ -74,6 +75,7 @@ const WelcomeIllustration = () => (
 
 export function InstanceSetupWelcomePage() {
   const navigate = useNavigate();
+  useDocumentTitle('Get started');
 
   return (
     <div className="flex min-h-screen flex-col bg-(--bg-canvas)">

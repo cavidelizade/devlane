@@ -32,6 +32,7 @@ import { projectService } from '../services/projectService';
 import { pageService } from '../services/pageService';
 import { cn } from '../lib/utils';
 import { sanitizeHtml } from '../lib/sanitize';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   PageApiResponse,
   PageVersionApiResponse,
@@ -82,6 +83,8 @@ export function PageDetailPage() {
   const [page, setPage] = useState<PageApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  useDocumentTitle(page?.name ?? 'Page');
 
   const [titleInput, setTitleInput] = useState('');
   const [titleStatus, setTitleStatus] = useState<SaveStatus>({ kind: 'idle' });

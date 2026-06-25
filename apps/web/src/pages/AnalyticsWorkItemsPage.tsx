@@ -15,6 +15,7 @@ import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -101,6 +102,8 @@ export function AnalyticsWorkItemsPage() {
   const [issues, setIssues] = useState<IssueApiResponse[]>([]);
   const [states, setStates] = useState<StateApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useDocumentTitle('Analytics');
 
   useEffect(() => {
     if (!workspaceSlug) {

@@ -6,6 +6,7 @@ import { workspaceService } from '../services/workspaceService';
 import { notificationService } from '../services/notificationService';
 import { NotificationContent } from '../components/notifications/NotificationContent';
 import { SnoozeMenu } from '../components/notifications/SnoozeMenu';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type { WorkspaceApiResponse, NotificationApiResponse } from '../api/types';
 
 type InboxTab = 'all' | 'mentions' | 'archived';
@@ -53,6 +54,8 @@ export function NotificationsPage() {
   // IDs the user explicitly marked unread in this session; the auto-mark-read
   // effect below skips them so the toggle actually sticks.
   const [explicitUnreadIds, setExplicitUnreadIds] = useState<Set<string>>(new Set());
+
+  useDocumentTitle('Inbox');
 
   useEffect(() => {
     if (!workspaceSlug) {

@@ -7,6 +7,7 @@ import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -105,6 +106,8 @@ export function ProfilePage() {
     if (userId && user?.id === userId) return user;
     return user ?? null; // Only current user supported until user-by-id API exists
   }, [userId, user]);
+
+  useDocumentTitle(profileUser?.name ?? 'Profile');
 
   const member = profileUser ? (members.find((m) => m.member_id === profileUser.id) ?? null) : null;
   const joinedAt = member?.created_at ?? new Date().toISOString();

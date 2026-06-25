@@ -17,6 +17,7 @@ import {
   PROJECT_VIEWS_REFRESH_EVENT,
 } from '../lib/projectViewsEvents';
 import { findWorkspaceMemberByUserId, getImageUrl } from '../lib/utils';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -292,6 +293,7 @@ export function ViewsPage() {
   });
   const [members, setMembers] = useState<WorkspaceMemberApiResponse[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  useDocumentTitle('Views');
 
   const loadPageData = useCallback(() => {
     if (!workspaceSlug || !projectId) {
