@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Archive } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, Avatar } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { Dropdown, DatePickerTrigger, CommentEditor } from '../components/work-item';
@@ -269,6 +270,7 @@ const BotGitHubIcon = () => (
 
 export function IssueDetailPage() {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const { workspaceSlug, projectId, issueId } = useParams<{
     workspaceSlug: string;
     projectId: string;
@@ -439,6 +441,17 @@ export function IssueDetailPage() {
 
   const baseUrl = `/${workspace.slug}/projects/${project.id}`;
   const displayId = `${project.identifier ?? project.id.slice(0, 8)}-${issue.sequence_id ?? issue.id.slice(-4)}`;
+
+  const handleArchive = async () => {
+    if (!workspaceSlug || !projectId || !issueId) return;
+    if (!window.confirm('Archive this work item? It will be hidden from active lists.')) return;
+    try {
+      await issueService.archive(workspaceSlug, projectId, issueId);
+      navigate(`${baseUrl}/issues`);
+    } catch {
+      setErrorMessage('Failed to archive work item.');
+    }
+  };
   const descriptionHtml =
     issue.description_html && typeof issue.description_html === 'string'
       ? issue.description_html
@@ -598,16 +611,26 @@ export function IssueDetailPage() {
           {errorMessage}
         </div>
       )}
-      <div className="flex items-center gap-2 text-sm text-(--txt-tertiary)">
-        <Link to={baseUrl} className="text-(--txt-accent-primary) hover:underline">
-          {project.name}
-        </Link>
-        <span>/</span>
-        <Link to={`${baseUrl}/issues`} className="text-(--txt-accent-primary) hover:underline">
-          Issues
-        </Link>
-        <span>/</span>
-        <span className="text-(--txt-secondary)">{displayId}</span>
+      <div className="flex items-center justify-between gap-2 text-sm text-(--txt-tertiary)">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link to={baseUrl} className="text-(--txt-accent-primary) hover:underline">
+            {project.name}
+          </Link>
+          <span>/</span>
+          <Link to={`${baseUrl}/issues`} className="text-(--txt-accent-primary) hover:underline">
+            Issues
+          </Link>
+          <span>/</span>
+          <span className="text-(--txt-secondary)">{displayId}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleArchive()}
+          className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover)"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          Archive
+        </button>
       </div>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">

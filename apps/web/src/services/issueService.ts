@@ -294,4 +294,26 @@ export const issueService = {
       `${base(workspaceSlug, projectId, issueId)}/reactions/${encodeURIComponent(reaction)}/`,
     );
   },
+
+  async archive(workspaceSlug: string, projectId: string, issueId: string): Promise<void> {
+    await apiClient.post(`${base(workspaceSlug, projectId, issueId)}/archive/`);
+  },
+
+  async restore(workspaceSlug: string, projectId: string, issueId: string): Promise<void> {
+    await apiClient.delete(`${base(workspaceSlug, projectId, issueId)}/archive/`);
+  },
+
+  async listArchived(
+    workspaceSlug: string,
+    projectId: string,
+    params: ListIssuesParams = {},
+  ): Promise<IssueApiResponse[]> {
+    const search = new URLSearchParams();
+    if (params.limit != null) search.set('limit', String(params.limit));
+    if (params.offset != null) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    const url = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/archived-issues/${qs ? `?${qs}` : ''}`;
+    const { data } = await apiClient.get<IssueApiResponse[]>(url);
+    return data;
+  },
 };

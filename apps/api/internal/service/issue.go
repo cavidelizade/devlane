@@ -127,9 +127,9 @@ func (s *IssueService) ensureWorkspaceAccess(ctx context.Context, workspaceSlug 
 	return wrk, nil
 }
 
-// issueForReaction auth-checks the caller and returns the issue, ensuring it
+// issueForAccess auth-checks the caller and returns the issue, ensuring it
 // belongs to the project in the URL.
-func (s *IssueService) issueForReaction(ctx context.Context, workspaceSlug string, projectID, issueID, userID uuid.UUID) (*model.Issue, error) {
+func (s *IssueService) issueForAccess(ctx context.Context, workspaceSlug string, projectID, issueID, userID uuid.UUID) (*model.Issue, error) {
 	if err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (s *IssueService) ListReactions(ctx context.Context, workspaceSlug string, 
 	if s.reactions == nil {
 		return []model.IssueReaction{}, nil
 	}
-	if _, err := s.issueForReaction(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+	if _, err := s.issueForAccess(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
 		return nil, err
 	}
 	return s.reactions.ListByIssueID(ctx, issueID)
@@ -157,7 +157,7 @@ func (s *IssueService) AddReaction(ctx context.Context, workspaceSlug string, pr
 	if s.reactions == nil {
 		return nil, errors.New("reactions store is not configured")
 	}
-	issue, err := s.issueForReaction(ctx, workspaceSlug, projectID, issueID, userID)
+	issue, err := s.issueForAccess(ctx, workspaceSlug, projectID, issueID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +182,35 @@ func (s *IssueService) RemoveReaction(ctx context.Context, workspaceSlug string,
 	if s.reactions == nil {
 		return errors.New("reactions store is not configured")
 	}
-	if _, err := s.issueForReaction(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+	if _, err := s.issueForAccess(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
 		return err
 	}
 	return s.reactions.Remove(ctx, issueID, userID, emoji)
+}
+
+// Archive marks an issue as archived (hidden from active lists, kept for the
+// archived view). Restore reverses it.
+func (s *IssueService) Archive(ctx context.Context, workspaceSlug string, projectID, issueID, userID uuid.UUID) error {
+	if _, err := s.issueForAccess(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+		return err
+	}
+	return s.is.SetArchived(ctx, issueID, true)
+}
+
+// Restore un-archives an issue.
+func (s *IssueService) Restore(ctx context.Context, workspaceSlug string, projectID, issueID, userID uuid.UUID) error {
+	if _, err := s.issueForAccess(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+		return err
+	}
+	return s.is.SetArchived(ctx, issueID, false)
+}
+
+// ListArchived returns archived issues for a project.
+func (s *IssueService) ListArchived(ctx context.Context, workspaceSlug string, projectID, userID uuid.UUID, limit, offset int) ([]model.Issue, error) {
+	if err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
+		return nil, err
+	}
+	return s.is.ListArchivedByProjectID(ctx, projectID, limit, offset)
 }
 
 // ListDraftsForWorkspace returns draft issues for all projects in the workspace the user can access.
