@@ -48,7 +48,31 @@ export interface IssueLayoutProps {
    * identifier. When omitted, the single `project` prop is used.
    */
   projectsById?: Record<string, ProjectApiResponse>;
+  /**
+   * Board layout only: group columns by canonical state group (Backlog / Todo /
+   * In Progress / Done / Cancelled) instead of by individual state. Used by
+   * workspace-wide views where states differ per project but share groups.
+   */
+  groupByStateGroup?: boolean;
 }
+
+/** Canonical state groups, in board column order. */
+export const STATE_GROUP_ORDER = [
+  'backlog',
+  'unstarted',
+  'started',
+  'completed',
+  'cancelled',
+] as const;
+
+/** Display labels for the canonical state groups. */
+export const STATE_GROUP_LABELS: Record<string, string> = {
+  backlog: 'Backlog',
+  unstarted: 'Todo',
+  started: 'In Progress',
+  completed: 'Done',
+  cancelled: 'Cancelled',
+};
 
 /**
  * The human "DEV-42" identifier for an issue. In multi-project (workspace)

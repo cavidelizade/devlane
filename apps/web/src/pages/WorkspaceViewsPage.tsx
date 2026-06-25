@@ -741,7 +741,7 @@ export function WorkspaceViewsPage() {
     return (
       <div className="-mt-(--padding-page) -mr-(--padding-page) -mb-(--padding-page) flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-auto">
-          {display.layout === 'kanban' && <IssueLayoutBoard {...layoutProps} />}
+          {display.layout === 'kanban' && <IssueLayoutBoard {...layoutProps} groupByStateGroup />}
           {display.layout === 'calendar' && <IssueLayoutCalendar {...layoutProps} />}
           {display.layout === 'gantt_chart' && <IssueLayoutGantt {...layoutProps} />}
         </div>
