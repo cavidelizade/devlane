@@ -326,6 +326,9 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/reactions/", issueHandler.ListReactions)
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/reactions/", issueHandler.AddReaction)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/reactions/:reaction/", issueHandler.RemoveReaction)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/archive/", issueHandler.Archive)
+		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/archive/", issueHandler.Restore)
+		api.GET("/workspaces/:slug/projects/:projectId/archived-issues/", issueHandler.ListArchived)
 
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.Create)

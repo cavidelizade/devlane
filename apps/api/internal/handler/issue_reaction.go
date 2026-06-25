@@ -10,8 +10,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// reactionNotFound maps service access errors to a 404.
-func reactionIsNotFound(err error) bool {
+// issueAccessNotFound reports whether a service error should map to a 404
+// (workspace/project/issue access failures).
+func issueAccessNotFound(err error) bool {
 	return err == service.ErrProjectForbidden || err == service.ErrProjectNotFound || err == service.ErrIssueNotFound
 }
 
@@ -36,7 +37,7 @@ func (h *IssueHandler) ListReactions(c *gin.Context) {
 	}
 	list, err := h.Issue.ListReactions(c.Request.Context(), slug, projectID, iid, user.ID)
 	if err != nil {
-		if reactionIsNotFound(err) {
+		if issueAccessNotFound(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 			return
 		}
@@ -73,7 +74,7 @@ func (h *IssueHandler) AddReaction(c *gin.Context) {
 	r, err := h.Issue.AddReaction(c.Request.Context(), slug, projectID, iid, user.ID, body.Reaction)
 	if err != nil {
 		switch {
-		case reactionIsNotFound(err):
+		case issueAccessNotFound(err):
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 		case errors.Is(err, service.ErrReactionExists):
 			// The user already reacted with this emoji (unique-constraint).
@@ -111,7 +112,7 @@ func (h *IssueHandler) RemoveReaction(c *gin.Context) {
 		return
 	}
 	if err := h.Issue.RemoveReaction(c.Request.Context(), slug, projectID, iid, user.ID, reaction); err != nil {
-		if reactionIsNotFound(err) {
+		if issueAccessNotFound(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
 			return
 		}

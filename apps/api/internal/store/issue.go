@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/binary"
+	"time"
 
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/google/uuid"
@@ -75,7 +76,9 @@ func (s *IssueStore) ListByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Is
 
 func (s *IssueStore) ListByProjectID(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]model.Issue, error) {
 	var list []model.Issue
-	q := s.db.WithContext(ctx).Where("project_id = ? AND deleted_at IS NULL", projectID).Order("sort_order ASC, created_at DESC")
+	q := s.db.WithContext(ctx).
+		Where("project_id = ? AND deleted_at IS NULL AND archived_at IS NULL", projectID).
+		Order("sort_order ASC, created_at DESC")
 	if limit > 0 {
 		q = q.Limit(limit)
 	}
@@ -84,6 +87,35 @@ func (s *IssueStore) ListByProjectID(ctx context.Context, projectID uuid.UUID, l
 	}
 	err := q.Find(&list).Error
 	return list, err
+}
+
+// ListArchivedByProjectID returns archived (non-deleted) issues for a project.
+func (s *IssueStore) ListArchivedByProjectID(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]model.Issue, error) {
+	var list []model.Issue
+	q := s.db.WithContext(ctx).
+		Where("project_id = ? AND deleted_at IS NULL AND archived_at IS NOT NULL", projectID).
+		Order("archived_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if offset > 0 {
+		q = q.Offset(offset)
+	}
+	err := q.Find(&list).Error
+	return list, err
+}
+
+// SetArchived archives (sets archived_at) or restores (clears archived_at) an
+// issue. archived_at is the source of truth for archived state.
+func (s *IssueStore) SetArchived(ctx context.Context, id uuid.UUID, archived bool) error {
+	updates := map[string]any{"archived_at": nil}
+	if archived {
+		updates["archived_at"] = time.Now()
+	}
+	return s.db.WithContext(ctx).
+		Model(&model.Issue{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(updates).Error
 }
 
 func (s *IssueStore) ListDraftsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID, limit, offset int) ([]model.Issue, error) {
