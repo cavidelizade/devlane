@@ -64,6 +64,75 @@ func (s *ModuleStore) ListModuleIssueIDs(ctx context.Context, moduleID uuid.UUID
 	return ids, nil
 }
 
+// SetMembers replaces a module's member set with memberIDs (in a transaction).
+func (s *ModuleStore) SetMembers(ctx context.Context, moduleID uuid.UUID, memberIDs []uuid.UUID, actorID uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("module_id = ?", moduleID).Delete(&model.ModuleMember{}).Error; err != nil {
+			return err
+		}
+		if len(memberIDs) == 0 {
+			return nil
+		}
+		// De-dupe to respect the (module_id, member_id) unique constraint.
+		seen := make(map[uuid.UUID]bool, len(memberIDs))
+		rows := make([]model.ModuleMember, 0, len(memberIDs))
+		for _, mid := range memberIDs {
+			if mid == uuid.Nil || seen[mid] {
+				continue
+			}
+			seen[mid] = true
+			actor := actorID
+			rows = append(rows, model.ModuleMember{
+				ModuleID:    moduleID,
+				MemberID:    mid,
+				CreatedByID: &actor,
+				UpdatedByID: &actor,
+			})
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
+}
+
+// ListMemberIDs returns the member ids for a module.
+func (s *ModuleStore) ListMemberIDs(ctx context.Context, moduleID uuid.UUID) ([]uuid.UUID, error) {
+	var rows []struct{ MemberID uuid.UUID }
+	err := s.db.WithContext(ctx).Model(&model.ModuleMember{}).
+		Where("module_id = ?", moduleID).Select("member_id").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.MemberID)
+	}
+	return ids, nil
+}
+
+// ListMemberIDsByModuleIDs returns member ids for many modules, keyed by module id.
+func (s *ModuleStore) ListMemberIDsByModuleIDs(ctx context.Context, moduleIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	out := make(map[uuid.UUID][]uuid.UUID)
+	if len(moduleIDs) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		ModuleID uuid.UUID `gorm:"column:module_id"`
+		MemberID uuid.UUID `gorm:"column:member_id"`
+	}
+	err := s.db.WithContext(ctx).Model(&model.ModuleMember{}).
+		Select("module_id, member_id").
+		Where("module_id IN ?", moduleIDs).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.ModuleID] = append(out[r.ModuleID], r.MemberID)
+	}
+	return out, nil
+}
+
 func (s *ModuleStore) CountIssuesByModuleIDs(ctx context.Context, moduleIDs []uuid.UUID) (map[uuid.UUID]int, error) {
 	out := make(map[uuid.UUID]int)
 	if len(moduleIDs) == 0 {

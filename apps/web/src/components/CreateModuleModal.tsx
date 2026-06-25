@@ -119,6 +119,8 @@ export function CreateModuleModal({
         status: status || 'backlog',
         start_date: startDate || undefined,
         target_date: endDate || undefined,
+        lead_id: leadId || undefined,
+        member_ids: memberIds.length > 0 ? memberIds : undefined,
       });
       onClose();
       onCreated?.(created);
