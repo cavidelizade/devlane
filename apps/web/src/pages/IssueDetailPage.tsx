@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Archive } from 'lucide-react';
+import { Archive, ArchiveRestore } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, Avatar } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { Dropdown, DatePickerTrigger, CommentEditor } from '../components/work-item';
@@ -452,6 +452,16 @@ export function IssueDetailPage() {
       setErrorMessage('Failed to archive work item.');
     }
   };
+
+  const handleRestore = async () => {
+    if (!workspaceSlug || !projectId || !issueId) return;
+    try {
+      await issueService.restore(workspaceSlug, projectId, issueId);
+      setIssue((prev) => (prev ? { ...prev, archived_at: null } : prev));
+    } catch {
+      setErrorMessage('Failed to restore work item.');
+    }
+  };
   const descriptionHtml =
     issue.description_html && typeof issue.description_html === 'string'
       ? issue.description_html
@@ -623,14 +633,25 @@ export function IssueDetailPage() {
           <span>/</span>
           <span className="text-(--txt-secondary)">{displayId}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleArchive()}
-          className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover)"
-        >
-          <Archive className="h-3.5 w-3.5" />
-          Archive
-        </button>
+        {issue.archived_at ? (
+          <button
+            type="button"
+            onClick={() => void handleRestore()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover)"
+          >
+            <ArchiveRestore className="h-3.5 w-3.5" />
+            Restore
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleArchive()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover)"
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Archive
+          </button>
+        )}
       </div>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
