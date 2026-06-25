@@ -118,6 +118,35 @@ export function IssueListPage() {
       .catch(() => {});
   };
 
+  // Multi-select for bulk actions (list layout).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBulkError(null);
+  };
+
+  const runBulk = async (fn: (slug: string, pid: string, ids: string[]) => Promise<void>) => {
+    if (!workspaceSlug || !projectId || visibleSelectedIds.size === 0) return;
+    setBulkError(null);
+    try {
+      await fn(workspaceSlug, projectId, [...visibleSelectedIds]);
+      // Only clear the selection once the action actually succeeded.
+      clearSelection();
+      refetchIssues();
+    } catch {
+      setBulkError('Bulk action failed. Nothing was changed — try again.');
+      refetchIssues();
+    }
+  };
+
   useEffect(() => {
     if (!workspaceSlug || !projectId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading when no slug/project (kept for future use)
@@ -364,6 +393,13 @@ export function IssueListPage() {
     return list;
   }, [issues, states, listFilters]);
 
+  // Effective selection = selected ids still visible under the current filters.
+  // Deriving this (instead of syncing state in an effect) keeps bulk actions
+  // scoped to currently-shown items without stale-state churn. Plain consts —
+  // the React Compiler handles memoization.
+  const visibleIssueIds = new Set(filteredIssues.map((i) => i.id));
+  const visibleSelectedIds = new Set([...selectedIds].filter((id) => visibleIssueIds.has(id)));
+
   const subWorkCountByParentId = useMemo(() => {
     const m = new Map<string, number>();
     for (const i of issues) {
@@ -552,6 +588,80 @@ export function IssueListPage() {
         </div>
       ) : (
         <>
+          {layout === 'list' && visibleSelectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-(--border-subtle) bg-(--bg-surface-1) px-4 py-2 text-sm">
+              <span className="font-medium text-(--txt-secondary)">
+                {visibleSelectedIds.size} selected
+              </span>
+              <select
+                aria-label="Set priority for selected"
+                className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-xs text-(--txt-secondary)"
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  e.currentTarget.value = '';
+                  if (v)
+                    void runBulk((s, p, ids) =>
+                      issueService.bulkUpdate(s, p, ids, { priority: v }),
+                    );
+                }}
+              >
+                <option value="">Set priority…</option>
+                {['urgent', 'high', 'medium', 'low', 'none'].map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Set state for selected"
+                className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-xs text-(--txt-secondary)"
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value;
+                  e.currentTarget.value = '';
+                  if (v)
+                    void runBulk((s, p, ids) =>
+                      issueService.bulkUpdate(s, p, ids, { state_id: v }),
+                    );
+                }}
+              >
+                <option value="">Set state…</option>
+                {states.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)"
+                onClick={() => void runBulk((s, p, ids) => issueService.bulkArchive(s, p, ids))}
+              >
+                Archive
+              </button>
+              <button
+                type="button"
+                className="rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-danger-primary) hover:bg-(--bg-layer-1-hover)"
+                onClick={() => {
+                  if (window.confirm(`Delete ${visibleSelectedIds.size} work item(s)?`))
+                    void runBulk((s, p, ids) => issueService.bulkDelete(s, p, ids));
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="ml-auto rounded-(--radius-md) px-2 py-1 text-xs text-(--txt-tertiary) hover:text-(--txt-secondary)"
+                onClick={clearSelection}
+              >
+                Clear
+              </button>
+              {bulkError && (
+                <span className="w-full text-xs text-(--txt-danger-primary)">{bulkError}</span>
+              )}
+            </div>
+          )}
           {layout === 'list' && (
             <IssueLayoutList
               {...layoutProps}
@@ -561,6 +671,7 @@ export function IssueListPage() {
               subWorkCountByParentId={subWorkCountByParentId}
               cycleName={cycleName}
               moduleName={moduleName}
+              selection={{ selectedIds, onToggle: toggleSelect }}
             />
           )}
           {layout === 'board' && <IssueLayoutBoard {...layoutProps} />}

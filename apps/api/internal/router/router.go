@@ -148,6 +148,7 @@ func New(cfg Config) *gin.Engine {
 	issueSvc.SetSubscriberStore(issueSubscriberStore)
 	issueReactionStore := store.NewIssueReactionStore(cfg.DB)
 	issueSvc.SetReactionStore(issueReactionStore)
+	issueSvc.SetStateStore(stateStore)
 	commentReactionStore := store.NewCommentReactionStore(cfg.DB)
 	commentSvc := service.NewCommentService(commentStore, issueStore, projectStore, workspaceStore)
 	commentSvc.SetReactionStore(commentReactionStore)
@@ -329,6 +330,9 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/archive/", issueHandler.Archive)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/archive/", issueHandler.Restore)
 		api.GET("/workspaces/:slug/projects/:projectId/archived-issues/", issueHandler.ListArchived)
+		api.POST("/workspaces/:slug/projects/:projectId/issues-bulk/update/", issueHandler.BulkUpdate)
+		api.POST("/workspaces/:slug/projects/:projectId/issues-bulk/archive/", issueHandler.BulkArchive)
+		api.POST("/workspaces/:slug/projects/:projectId/issues-bulk/delete/", issueHandler.BulkDelete)
 
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/", cycleHandler.Create)
