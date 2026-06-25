@@ -23,6 +23,11 @@ func TestIssue_MoveToProject(t *testing.T) {
 		IssueID: issue.ID, LabelID: label.ID, ProjectID: w.Project.ID, WorkspaceID: w.Workspace.ID,
 	}).Error)
 
+	// A child work item parented to the issue; it must be detached on move so the
+	// same-project parent/child invariant holds.
+	child := testutil.CreateIssue(t, ts.DB, w.Project.ID, w.Workspace.ID, w.User.ID)
+	require.NoError(t, ts.DB.Model(child).Update("parent_id", issue.ID).Error)
+
 	// Pre-seed the target with an issue so the moved item gets a fresh sequence.
 	testutil.CreateIssue(t, ts.DB, target.ID, w.Workspace.ID, w.User.ID)
 
@@ -43,6 +48,12 @@ func TestIssue_MoveToProject(t *testing.T) {
 	require.NoError(t, ts.DB.First(&moved, "id = ?", issue.ID).Error)
 	require.Equal(t, target.ID, moved.ProjectID)
 	require.Nil(t, moved.StateID)
+
+	// The child stays in the source project but is detached from the moved parent.
+	var movedChild model.Issue
+	require.NoError(t, ts.DB.First(&movedChild, "id = ?", child.ID).Error)
+	require.Equal(t, w.Project.ID, movedChild.ProjectID, "child stays in source project")
+	require.Nil(t, movedChild.ParentID, "child should be detached from a cross-project parent")
 }
 
 func TestIssue_MoveToSameProjectRejected(t *testing.T) {

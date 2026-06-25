@@ -195,6 +195,13 @@ func (s *IssueStore) MoveToProject(ctx context.Context, issueID, targetProjectID
 		}).Error; err != nil {
 			return err
 		}
+		// Detach any children: they stay in the source project, so keeping them
+		// parented to the moved issue would break the same-project hierarchy
+		// invariant (a child pointing at a parent in another project).
+		if err := tx.Model(&model.Issue{}).Where("parent_id = ?", issueID).
+			Updates(map[string]any{"parent_id": nil, "updated_by_id": userID}).Error; err != nil {
+			return err
+		}
 		// Drop associations that belong to the source project.
 		if err := tx.Where("issue_id = ?", issueID).Delete(&model.IssueLabel{}).Error; err != nil {
 			return err
@@ -215,6 +222,12 @@ func (s *IssueStore) MoveToProject(ctx context.Context, issueID, targetProjectID
 			return err
 		}
 		if err := tx.Model(&model.IssueAttachment{}).Where("issue_id = ?", issueID).
+			Update("project_id", targetProjectID).Error; err != nil {
+			return err
+		}
+		// GitHub PR↔issue sync rows are filtered by project_id in project summary
+		// queries, so repoint them too or the moved issue's PRs vanish there.
+		if err := tx.Model(&model.GithubIssueSync{}).Where("issue_id = ?", issueID).
 			Update("project_id", targetProjectID).Error; err != nil {
 			return err
 		}

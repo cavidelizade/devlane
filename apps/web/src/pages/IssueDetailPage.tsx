@@ -1973,8 +1973,8 @@ export function IssueDetailPage() {
       <Modal open={moveOpen} onClose={() => setMoveOpen(false)} title="Move work item to project">
         <div className="space-y-3">
           <p className="text-sm text-(--txt-tertiary)">
-            Choose a destination project. The work item gets a new ID there, and its state, parent,
-            labels, and cycle/module links are cleared.
+            Choose a destination project. The work item gets a new ID there; its state, parent,
+            labels, and cycle/module links are cleared, and any sub-items are detached.
           </p>
           {moveError ? (
             <p className="rounded-(--radius-md) bg-(--bg-danger-subtle) px-3 py-2 text-sm text-(--txt-danger)">
