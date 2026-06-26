@@ -25,3 +25,23 @@ export function membersFromAssigneeIds(
   }
   return out;
 }
+
+/**
+ * True when `targetDate` is in the past (older than ~1 day) and the issue isn't
+ * already completed/cancelled. Shared so editable date cells reuse the same
+ * overdue cue the read-only DueDateCell shows. `now` is passed in for purity.
+ */
+export function isOverdue(
+  targetDate: string | null | undefined,
+  stateGroup: string | undefined,
+  now: number,
+): boolean {
+  if (!targetDate) return false;
+  const t = Date.parse(targetDate);
+  if (Number.isNaN(t)) return false;
+  // Accept both spellings of the cancelled group (the API uses "canceled").
+  if (stateGroup === 'completed' || stateGroup === 'cancelled' || stateGroup === 'canceled') {
+    return false;
+  }
+  return t < now - 24 * 3600 * 1000;
+}

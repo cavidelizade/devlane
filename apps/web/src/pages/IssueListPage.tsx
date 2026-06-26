@@ -16,6 +16,7 @@ import { IssueLayoutSpreadsheet } from '../components/work-item/layouts/IssueLay
 import { IssueLayoutCalendar } from '../components/work-item/layouts/IssueLayoutCalendar';
 import { IssueLayoutGantt } from '../components/work-item/layouts/IssueLayoutGantt';
 import { parseIssueLayout } from '../components/work-item/layouts/IssueLayoutTypes';
+import type { IssueInlinePatch } from '../components/work-item/layouts/IssueLayoutTypes';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -112,15 +113,19 @@ export function IssueListPage() {
   );
   // Chains reorder saves so rapid drags commit in order (see handleReorder).
   const reorderChain = useRef<Promise<unknown>>(Promise.resolve());
-  // Per-issue serialization for board drag-to-column: chain PATCHes so rapid
-  // drags of the same card commit in order, and a sequence token so only the
-  // latest move's failure triggers a refetch.
-  const cardMoveChains = useRef<Map<string, Promise<void>>>(new Map());
-  const cardMoveSeq = useRef<Map<string, number>>(new Map());
-  // Latest route key, so a late drag-failure refetch can be discarded if the
-  // user has since navigated to a different project.
+  // Per-issue serialization for inline edits + board drag-to-column: chain
+  // PATCHes so rapid updates to the same issue commit in order, and a sequence
+  // token so only the latest update's failure triggers a refetch.
+  const issueUpdateChains = useRef<Map<string, Promise<void>>>(new Map());
+  const issueUpdateSeq = useRef<Map<string, number>>(new Map());
+  // Set when any chained update for an issue fails, so the latest update
+  // reconciles local state with the server even if it itself succeeded.
+  const issueReconcileNeeded = useRef<Map<string, boolean>>(new Map());
+  // Latest route key, so a late update-failure reconcile can be discarded if the
+  // user has since navigated to a different project. Updated in a layout effect
+  // (synchronous, pre-paint) so the guard isn't stale during a route change.
   const routeKeyRef = useRef('');
-  useEffect(() => {
+  useLayoutEffect(() => {
     routeKeyRef.current = `${workspaceSlug ?? ''}/${projectId ?? ''}`;
   }, [workspaceSlug, projectId]);
   useDocumentTitle('Work items');
@@ -598,35 +603,56 @@ export function IssueListPage() {
 
   const reorderEnabled = listDisplay.orderBy === 'manual';
 
-  // Board drag-to-column: optimistically move the card's state, then persist.
-  // PATCHes for the same card are chained (commit in order); only the latest
-  // move's failure refetches, so a stale older request can't clobber a newer one.
-  const handleCardMove = (issueId: string, targetStateId: string) => {
+  // Optimistically apply `patch` to an issue, then persist. PATCHes for the same
+  // issue are chained (commit in order); only the latest update's failure
+  // refetches, and only while still on the project that initiated it — so a
+  // stale older request can't clobber a newer one or a different route's list.
+  const persistIssueUpdate = (issueId: string, patch: IssueInlinePatch) => {
     if (!workspaceSlug || !projectId) return;
-    const current = issues.find((i) => i.id === issueId);
-    if (!current || current.state_id === targetStateId) return;
-    const routeKey = `${workspaceSlug}/${projectId}`;
-    const seq = (cardMoveSeq.current.get(issueId) ?? 0) + 1;
-    cardMoveSeq.current.set(issueId, seq);
-    setIssues((prev) =>
-      prev.map((i) => (i.id === issueId ? { ...i, state_id: targetStateId } : i)),
-    );
-    const prevChain = cardMoveChains.current.get(issueId) ?? Promise.resolve();
+    const slug = workspaceSlug;
+    const pid = projectId;
+    const routeKey = `${slug}/${pid}`;
+    const seq = (issueUpdateSeq.current.get(issueId) ?? 0) + 1;
+    issueUpdateSeq.current.set(issueId, seq);
+    setIssues((prev) => prev.map((i) => (i.id === issueId ? { ...i, ...patch } : i)));
+    const prevChain = issueUpdateChains.current.get(issueId) ?? Promise.resolve();
     const next = prevChain
       .catch(() => {})
-      .then(() =>
-        issueService.update(workspaceSlug, projectId, issueId, { state_id: targetStateId }),
+      .then(() => issueService.update(slug, pid, issueId, patch))
+      .then(
+        () => undefined,
+        // Record the failure rather than reverting here — a later update in the
+        // chain (possibly to a different field) must not be lost, so we let the
+        // newest update reconcile once the chain drains.
+        () => {
+          issueReconcileNeeded.current.set(issueId, true);
+        },
       )
-      .then(() => undefined)
-      .catch(() => {
-        // Skip if superseded by a newer move, or if the user navigated to a
-        // different project (the refetch would replace the new route's list).
-        if (cardMoveSeq.current.get(issueId) === seq && routeKeyRef.current === routeKey) {
-          refetchIssues();
-        }
+      .then(() => {
+        if (issueUpdateSeq.current.get(issueId) !== seq) return;
+        if (!issueReconcileNeeded.current.get(issueId)) return;
+        issueReconcileNeeded.current.delete(issueId);
+        if (routeKeyRef.current !== routeKey) return;
+        // Re-fetch just this issue so a rejected PATCH can't leave a stale
+        // optimistic value, without clobbering other issues' in-flight edits.
+        issueService
+          .get(slug, pid, issueId)
+          .then((fresh) => setIssues((prev) => prev.map((i) => (i.id === issueId ? fresh : i))))
+          .catch(() => {});
       });
-    cardMoveChains.current.set(issueId, next);
+    issueUpdateChains.current.set(issueId, next);
   };
+
+  // Board drag-to-column: move the card's state.
+  const handleCardMove = (issueId: string, targetStateId: string) => {
+    const current = issues.find((i) => i.id === issueId);
+    if (!current || current.state_id === targetStateId) return;
+    persistIssueUpdate(issueId, { state_id: targetStateId });
+  };
+
+  // Inline property edits from list/spreadsheet cells.
+  const handleInlineUpdate = (issueId: string, patch: IssueInlinePatch) =>
+    persistIssueUpdate(issueId, patch);
 
   return (
     <div className="w-full">
@@ -749,10 +775,19 @@ export function IssueListPage() {
               moduleName={moduleName}
               selection={{ selectedIds, onToggle: toggleSelect }}
               onReorder={reorderEnabled ? handleReorder : undefined}
+              onUpdateIssue={handleInlineUpdate}
             />
           )}
-          {layout === 'board' && <IssueLayoutBoard {...layoutProps} onCardMove={handleCardMove} />}
-          {layout === 'spreadsheet' && <IssueLayoutSpreadsheet {...layoutProps} />}
+          {layout === 'board' && (
+            <IssueLayoutBoard
+              {...layoutProps}
+              onCardMove={handleCardMove}
+              onUpdateIssue={handleInlineUpdate}
+            />
+          )}
+          {layout === 'spreadsheet' && (
+            <IssueLayoutSpreadsheet {...layoutProps} onUpdateIssue={handleInlineUpdate} />
+          )}
           {layout === 'calendar' && <IssueLayoutCalendar {...layoutProps} />}
           {layout === 'gantt' && <IssueLayoutGantt {...layoutProps} />}
           {layout === 'list' && (
