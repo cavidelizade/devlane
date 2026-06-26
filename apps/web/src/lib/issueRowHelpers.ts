@@ -39,6 +39,9 @@ export function isOverdue(
   if (!targetDate) return false;
   const t = Date.parse(targetDate);
   if (Number.isNaN(t)) return false;
-  if (stateGroup === 'completed' || stateGroup === 'cancelled') return false;
+  // Accept both spellings of the cancelled group (the API uses "canceled").
+  if (stateGroup === 'completed' || stateGroup === 'cancelled' || stateGroup === 'canceled') {
+    return false;
+  }
   return t < now - 24 * 3600 * 1000;
 }
