@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +15,12 @@ func newGitLabTestServer(t *testing.T, body map[string]interface{}) *httptest.Se
 		if r.URL.Path != "/api/v4/user" {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET request, got %s", r.Method)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
+			t.Errorf("expected bearer token auth header, got %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(body)
@@ -33,7 +40,7 @@ func TestGitLabGetUserInfo_RejectsUnconfirmedEmail(t *testing.T) {
 
 	provider := NewGitLabProvider(ProviderConfig{}, srv.URL)
 	_, err := provider.GetUserInfo(context.Background(), &TokenData{AccessToken: "tok"})
-	if err != ErrEmailNotVerified {
+	if !errors.Is(err, ErrEmailNotVerified) {
 		t.Fatalf("expected ErrEmailNotVerified, got %v", err)
 	}
 }
