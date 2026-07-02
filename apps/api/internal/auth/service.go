@@ -240,7 +240,17 @@ func (s *Service) UserFromSession(ctx context.Context, sessionKey string) (*mode
 	if err != nil || data == nil {
 		return nil, nil
 	}
-	return s.userStore.GetByID(ctx, data.UserID)
+	user, err := s.userStore.GetByID(ctx, data.UserID)
+	if err != nil || user == nil {
+		return nil, nil
+	}
+	if !user.IsActive {
+		// Deactivation doesn't purge sessions, so re-check on every request
+		// rather than only at sign-in; evict this session while we're here.
+		_ = s.sessionStore.Delete(ctx, sessionKey)
+		return nil, nil
+	}
+	return user, nil
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, u *model.User) error {

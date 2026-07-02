@@ -210,6 +210,44 @@ func TestForgotResetPassword(t *testing.T) {
 	}
 }
 
+func TestUserFromSession_RejectsDeactivatedUser(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	svc, db := newTestService(t)
+
+	sessionKey, user, err := svc.SignUp(ctx, SignUpRequest{
+		Email:    "deactivated@example.com",
+		Password: "S3cur3!Pass",
+	})
+	if err != nil {
+		t.Fatalf("SignUp: %v", err)
+	}
+
+	// Sanity check: the session is valid while the user is active.
+	got, err := svc.UserFromSession(ctx, sessionKey)
+	if err != nil || got == nil {
+		t.Fatalf("UserFromSession before deactivation: got=%#v err=%v", got, err)
+	}
+
+	if err := db.Exec("UPDATE users SET is_active = 0 WHERE id = ?", user.ID.String()).Error; err != nil {
+		t.Fatalf("deactivate user: %v", err)
+	}
+
+	got2, err := svc.UserFromSession(ctx, sessionKey)
+	if err != nil || got2 != nil {
+		t.Fatalf("expected no user for a deactivated user's session, got=%#v err=%v", got2, err)
+	}
+
+	var sessionCount int64
+	if err := db.Table("sessions").Where("session_key = ?", sessionKey).Count(&sessionCount).Error; err != nil {
+		t.Fatalf("count sessions: %v", err)
+	}
+	if sessionCount != 0 {
+		t.Fatalf("expected the deactivated user's session to be evicted, found %d rows", sessionCount)
+	}
+}
+
 func TestResetPasswordInactiveUser(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
