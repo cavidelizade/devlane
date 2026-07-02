@@ -11,6 +11,7 @@ import (
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var (
@@ -353,6 +354,17 @@ func (s *ProjectService) DeleteInvite(ctx context.Context, workspaceSlug string,
 	return s.pinv.Delete(ctx, inviteID)
 }
 
+// requireInviteEmailMatch ensures the authenticated user's email matches the
+// invite's email, so a leaked/forwarded token can't be redeemed by a
+// different account.
+func (s *ProjectService) requireInviteEmailMatch(ctx context.Context, inviteEmail string, userID uuid.UUID) error {
+	u, err := s.us.GetByID(ctx, userID)
+	if err != nil || u.Email == nil || !strings.EqualFold(*u.Email, inviteEmail) {
+		return ErrInviteNotFound
+	}
+	return nil
+}
+
 func (s *ProjectService) JoinByToken(ctx context.Context, token string, userID uuid.UUID) (*model.Project, error) {
 	inv, err := s.pinv.GetByToken(ctx, token)
 	if err != nil || inv == nil {
@@ -362,10 +374,19 @@ func (s *ProjectService) JoinByToken(ctx context.Context, token string, userID u
 	if err != nil {
 		return nil, ErrProjectNotFound
 	}
+	if err := s.requireInviteEmailMatch(ctx, inv.Email, userID); err != nil {
+		return nil, err
+	}
 	inv.Accepted = true
-	_ = s.pinv.Update(ctx, inv)
-	m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
-	_ = s.ps.AddProjectMember(ctx, m)
+	if err := s.ps.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := tx.Save(inv).Error; err != nil {
+			return err
+		}
+		m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
+		return tx.Create(m).Error
+	}); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -378,10 +399,19 @@ func (s *ProjectService) JoinByInviteID(ctx context.Context, workspaceSlug strin
 	if err != nil || inv.ProjectID != p.ID || inv.Accepted {
 		return nil, ErrInviteNotFound
 	}
+	if err := s.requireInviteEmailMatch(ctx, inv.Email, userID); err != nil {
+		return nil, err
+	}
 	inv.Accepted = true
-	_ = s.pinv.Update(ctx, inv)
-	m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
-	_ = s.ps.AddProjectMember(ctx, m)
+	if err := s.ps.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := tx.Save(inv).Error; err != nil {
+			return err
+		}
+		m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
+		return tx.Create(m).Error
+	}); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var (
@@ -296,6 +297,17 @@ func (s *WorkspaceService) DeleteInvite(ctx context.Context, slug string, invite
 	return s.winv.Delete(ctx, inviteID)
 }
 
+// requireInviteEmailMatch ensures the authenticated user's email matches the
+// invite's email, so a leaked/forwarded token can't be redeemed by a
+// different account.
+func (s *WorkspaceService) requireInviteEmailMatch(ctx context.Context, inviteEmail string, userID uuid.UUID) error {
+	u, err := s.us.GetByID(ctx, userID)
+	if err != nil || u.Email == nil || !strings.EqualFold(*u.Email, inviteEmail) {
+		return ErrInviteNotFound
+	}
+	return nil
+}
+
 func (s *WorkspaceService) JoinByToken(ctx context.Context, token string, userID uuid.UUID) (*model.Workspace, error) {
 	inv, err := s.winv.GetByToken(ctx, token)
 	if err != nil || inv == nil {
@@ -305,10 +317,19 @@ func (s *WorkspaceService) JoinByToken(ctx context.Context, token string, userID
 	if err != nil {
 		return nil, ErrWorkspaceNotFound
 	}
+	if err := s.requireInviteEmailMatch(ctx, inv.Email, userID); err != nil {
+		return nil, err
+	}
 	inv.Accepted = true
-	_ = s.winv.Update(ctx, inv)
-	m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
-	_ = s.ws.AddMember(ctx, m)
+	if err := s.ws.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := tx.Save(inv).Error; err != nil {
+			return err
+		}
+		m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
+		return tx.Create(m).Error
+	}); err != nil {
+		return nil, err
+	}
 	return w, nil
 }
 
@@ -322,10 +343,19 @@ func (s *WorkspaceService) JoinByInviteID(ctx context.Context, slug string, invi
 	if err != nil || inv.WorkspaceID != w.ID || inv.Accepted {
 		return nil, ErrInviteNotFound
 	}
+	if err := s.requireInviteEmailMatch(ctx, inv.Email, userID); err != nil {
+		return nil, err
+	}
 	inv.Accepted = true
-	_ = s.winv.Update(ctx, inv)
-	m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
-	_ = s.ws.AddMember(ctx, m)
+	if err := s.ws.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := tx.Save(inv).Error; err != nil {
+			return err
+		}
+		m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
+		return tx.Create(m).Error
+	}); err != nil {
+		return nil, err
+	}
 	return w, nil
 }
 
