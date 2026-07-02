@@ -236,7 +236,7 @@ func New(cfg Config) *gin.Engine {
 
 	// Protected API: require auth
 	api := r.Group("/api")
-	api.Use(middleware.RequireAuth(authSvc, cfg.Log))
+	api.Use(middleware.RequireAuth(authSvc, apiTokenStore, cfg.Log))
 	{
 		api.GET("/users/me/", authHandler.Me)
 		api.PATCH("/users/me/", authHandler.UpdateMe)
@@ -503,7 +503,7 @@ func New(cfg Config) *gin.Engine {
 		authGroup.POST("/reset-password/", authHandler.ResetPassword)
 		authGroup.POST("/magic-code/request/", middleware.RateLimit(cfg.Redis, "magiccode", 10, 15*time.Minute), authHandler.MagicCodeRequest)
 		authGroup.POST("/magic-code/verify/", authHandler.MagicCodeVerify)
-		authGroup.POST("/set-password/", middleware.RequireAuth(authSvc, cfg.Log), authHandler.SetPassword)
+		authGroup.POST("/set-password/", middleware.RequireAuth(authSvc, apiTokenStore, cfg.Log), authHandler.SetPassword)
 	}
 
 	// OAuth routes (no auth required); provider resolved from instance settings at request time.
@@ -522,8 +522,8 @@ func New(cfg Config) *gin.Engine {
 	// GitHub App install flow (separate from OAuth user sign-in). Both
 	// require the user to be signed in so we can attach the installation to
 	// their workspace.
-	r.GET("/auth/github-app/install", middleware.RequireAuth(authSvc, cfg.Log), integrationHandler.GitHubInstallStart)
-	r.GET("/auth/github-app/callback", middleware.RequireAuth(authSvc, cfg.Log), integrationHandler.GitHubInstallCallback)
+	r.GET("/auth/github-app/install", middleware.RequireAuth(authSvc, apiTokenStore, cfg.Log), integrationHandler.GitHubInstallStart)
+	r.GET("/auth/github-app/callback", middleware.RequireAuth(authSvc, apiTokenStore, cfg.Log), integrationHandler.GitHubInstallCallback)
 
 	// GitHub webhook receiver — public; HMAC-signature-verified.
 	r.POST("/webhooks/github", integrationHandler.GitHubWebhook)
@@ -531,7 +531,7 @@ func New(cfg Config) *gin.Engine {
 
 	// Legacy /api/v1
 	v1 := r.Group("/api/v1")
-	v1.Use(middleware.RequireAuth(authSvc, cfg.Log))
+	v1.Use(middleware.RequireAuth(authSvc, apiTokenStore, cfg.Log))
 	{
 		v1.GET("/", func(c *gin.Context) {
 			c.JSON(200, gin.H{"message": "Devlane API v1"})

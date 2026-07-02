@@ -7,6 +7,7 @@ import (
 
 	"github.com/Devlaner/devlane/api/internal/auth"
 	"github.com/Devlaner/devlane/api/internal/model"
+	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,20 +28,44 @@ func SessionKeyFromCookieOrBearer(c *gin.Context) string {
 	return sessionKey
 }
 
-// RequireAuth loads the user from session and returns 401 if not authenticated.
-func RequireAuth(authSvc *auth.Service, log *slog.Logger) gin.HandlerFunc {
+// RequireAuth loads the user from a session cookie or Authorization: Bearer
+// header, and returns 401 if not authenticated. Bearer values are tried
+// first as an API token (hashed + looked up in api_tokens); if that doesn't
+// match, they fall back to being treated as a raw session key — kept for
+// the cross-origin OAuth SPA fragment flow (see SessionKeyFromCookieOrBearer).
+func RequireAuth(authSvc *auth.Service, apiTokens *store.ApiTokenStore, log *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		sessionKey := SessionKeyFromCookieOrBearer(c)
-		user, err := authSvc.UserFromSession(c.Request.Context(), sessionKey)
-		if err != nil || user == nil {
-			if log != nil {
-				log.Debug("auth required", "error", err, "has_session_key", sessionKey != "")
+		ctx := c.Request.Context()
+
+		if cookieKey, _ := c.Cookie(SessionCookieName); cookieKey != "" {
+			if user, err := authSvc.UserFromSession(ctx, cookieKey); err == nil && user != nil {
+				c.Set(UserContextKey, user)
+				c.Next()
+				return
 			}
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
-			return
+		} else if authHeader := c.GetHeader("Authorization"); len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "bearer ") {
+			bearer := strings.TrimSpace(authHeader[7:])
+			if apiTokens != nil {
+				if tok, err := apiTokens.GetActiveByHash(ctx, store.HashToken(bearer)); err == nil && tok != nil {
+					if user, err := authSvc.ActiveUserByID(ctx, tok.UserID); err == nil && user != nil {
+						_ = apiTokens.UpdateLastUsed(ctx, tok.ID)
+						c.Set(UserContextKey, user)
+						c.Next()
+						return
+					}
+				}
+			}
+			if user, err := authSvc.UserFromSession(ctx, bearer); err == nil && user != nil {
+				c.Set(UserContextKey, user)
+				c.Next()
+				return
+			}
 		}
-		c.Set(UserContextKey, user)
-		c.Next()
+
+		if log != nil {
+			log.Debug("auth required", "has_session_key", SessionKeyFromCookieOrBearer(c) != "")
+		}
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 	}
 }
 

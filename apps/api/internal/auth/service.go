@@ -253,6 +253,17 @@ func (s *Service) UserFromSession(ctx context.Context, sessionKey string) (*mode
 	return user, nil
 }
 
+// ActiveUserByID returns the user if they exist and are active, otherwise
+// nil. Used by API-token authentication so a deactivated user's still-valid
+// token is rejected the same way a deactivated user's session is.
+func (s *Service) ActiveUserByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	user, err := s.userStore.GetByID(ctx, id)
+	if err != nil || user == nil || !user.IsActive {
+		return nil, nil
+	}
+	return user, nil
+}
+
 func (s *Service) UpdateProfile(ctx context.Context, u *model.User) error {
 	return s.userStore.Update(ctx, u)
 }
