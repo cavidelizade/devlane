@@ -120,7 +120,16 @@ func (h *AuthHandler) SignIn(c *gin.Context) {
 			return
 		}
 	}
-	sessionKey, user, err := h.Auth.SignIn(c.Request.Context(), auth.SignInRequest{Email: req.Email, Password: req.Password})
+	ctx := c.Request.Context()
+	if h.Redis != nil {
+		emailNorm := strings.ToLower(strings.TrimSpace(req.Email))
+		ok, err := h.Redis.Allow(ctx, redis.PrefixRateLimit+"signinacct:"+emailNorm, 10, 15*time.Minute)
+		if err == nil && !ok {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many sign-in attempts for this account, please try again later"})
+			return
+		}
+	}
+	sessionKey, user, err := h.Auth.SignIn(ctx, auth.SignInRequest{Email: req.Email, Password: req.Password})
 	if err != nil {
 		if errors.Is(err, auth.ErrUserDeactivated) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Your account has been deactivated. Please contact the administrator.", "error_code": "USER_ACCOUNT_DEACTIVATED"})
@@ -884,6 +893,19 @@ func (h *AuthHandler) MagicCodeVerify(c *gin.Context) {
 		return
 	}
 
+	// Failed-verify attempts are tracked on a key independent of the code's
+	// own TTL/Attempts, so requesting a new code does not reset this lockout.
+	failCount, err := h.Redis.MagicCodeVerifyFailCount(ctx, body.Email)
+	if err != nil {
+		h.log().Error("magic code verify-fail count", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Verification failed"})
+		return
+	}
+	if failCount >= redis.MagicCodeVerifyFailMax {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many incorrect attempts. Please request a new code later."})
+		return
+	}
+
 	stored, err := h.Redis.GetMagicCodeLogin(ctx, body.Email)
 	if err != nil {
 		h.log().Error("magic code redis get", "error", err)
@@ -898,6 +920,7 @@ func (h *AuthHandler) MagicCodeVerify(c *gin.Context) {
 	tryMAC := auth.MagicCodeHMAC(h.MagicCodeSecret, body.Email, body.Code)
 	if subtle.ConstantTimeCompare([]byte(stored.CodeMAC), []byte(tryMAC)) != 1 {
 		_ = h.Redis.BumpMagicCodeLoginFailedAttempt(ctx, body.Email)
+		_ = h.Redis.BumpMagicCodeVerifyFail(ctx, body.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
 		return
 	}
@@ -909,6 +932,7 @@ func (h *AuthHandler) MagicCodeVerify(c *gin.Context) {
 	}
 
 	_ = h.Redis.DeleteMagicCodeLogin(ctx, body.Email)
+	_ = h.Redis.ResetMagicCodeVerifyFail(ctx, body.Email)
 
 	if stored.IsSignup {
 		sessionKey, user, err := h.Auth.SignUpMagic(ctx, body.Email, body.FirstName, body.LastName)

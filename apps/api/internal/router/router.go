@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/Devlaner/devlane/api/internal/auth"
 	gh "github.com/Devlaner/devlane/api/internal/github"
@@ -494,13 +495,13 @@ func New(cfg Config) *gin.Engine {
 	authGroup := r.Group("/auth")
 	{
 		authGroup.GET("/config/", authHandler.InstanceAuthConfig)
-		authGroup.POST("/email-check/", authHandler.EmailCheck)
-		authGroup.POST("/sign-in/", authHandler.SignIn)
+		authGroup.POST("/email-check/", middleware.RateLimit(cfg.Redis, "emailcheck", 30, 15*time.Minute), authHandler.EmailCheck)
+		authGroup.POST("/sign-in/", middleware.RateLimit(cfg.Redis, "signin", 20, 15*time.Minute), authHandler.SignIn)
 		authGroup.POST("/sign-up/", authHandler.SignUp)
 		authGroup.POST("/sign-out/", authHandler.SignOut)
-		authGroup.POST("/forgot-password/", authHandler.ForgotPassword)
+		authGroup.POST("/forgot-password/", middleware.RateLimit(cfg.Redis, "forgotpw", 10, 15*time.Minute), authHandler.ForgotPassword)
 		authGroup.POST("/reset-password/", authHandler.ResetPassword)
-		authGroup.POST("/magic-code/request/", authHandler.MagicCodeRequest)
+		authGroup.POST("/magic-code/request/", middleware.RateLimit(cfg.Redis, "magiccode", 10, 15*time.Minute), authHandler.MagicCodeRequest)
 		authGroup.POST("/magic-code/verify/", authHandler.MagicCodeVerify)
 		authGroup.POST("/set-password/", middleware.RequireAuth(authSvc, cfg.Log), authHandler.SetPassword)
 	}
