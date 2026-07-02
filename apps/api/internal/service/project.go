@@ -59,18 +59,27 @@ func (s *ProjectService) GetByID(ctx context.Context, workspaceSlug string, proj
 	return s.ps.GetByID(ctx, projectID)
 }
 
-// requireProjectAdmin allows the action when the caller is a workspace
-// admin/owner, or a project member with at least the Admin role. Read access
-// (workspace membership) is validated separately by GetByID.
-func (s *ProjectService) requireProjectAdmin(ctx context.Context, workspaceID, projectID, userID uuid.UUID) error {
+// projectCallerRole returns the caller's effective role for admin actions on
+// a project: their workspace role if they are a workspace admin/owner,
+// otherwise their project-member role. Returns ErrProjectForbidden if
+// neither grants at least the Admin role. Read access (workspace membership)
+// is validated separately by GetByID.
+func (s *ProjectService) projectCallerRole(ctx context.Context, workspaceID, projectID, userID uuid.UUID) (int16, error) {
 	if wm, err := s.ws.GetMember(ctx, workspaceID, userID); err == nil && wm != nil && wm.Role >= model.RoleAdmin {
-		return nil
+		return wm.Role, nil
 	}
 	pm, err := s.ps.GetProjectMember(ctx, projectID, userID)
 	if err != nil || pm == nil || pm.Role < model.RoleAdmin {
-		return ErrProjectForbidden
+		return 0, ErrProjectForbidden
 	}
-	return nil
+	return pm.Role, nil
+}
+
+// requireProjectAdmin allows the action when the caller is a workspace
+// admin/owner, or a project member with at least the Admin role.
+func (s *ProjectService) requireProjectAdmin(ctx context.Context, workspaceID, projectID, userID uuid.UUID) error {
+	_, err := s.projectCallerRole(ctx, workspaceID, projectID, userID)
+	return err
 }
 
 func (s *ProjectService) Create(ctx context.Context, workspaceSlug, name, identifier string, userID uuid.UUID) (*model.Project, error) {
@@ -201,12 +210,27 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, workspaceSlug str
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireProjectAdmin(ctx, p.WorkspaceID, p.ID, userID); err != nil {
+	callerRole, err := s.projectCallerRole(ctx, p.WorkspaceID, p.ID, userID)
+	if err != nil {
 		return nil, err
+	}
+	wrk, err := s.ws.GetByID(ctx, p.WorkspaceID)
+	if err != nil {
+		return nil, ErrProjectNotFound
 	}
 	m, err := s.ps.GetProjectMemberByPK(ctx, memberPK)
 	if err != nil || m.ProjectID != projectID {
 		return nil, ErrMemberNotFound
+	}
+	// Only the workspace owner may change the role of their own project
+	// membership; nobody else may touch it.
+	if m.MemberID != nil && *m.MemberID == wrk.OwnerID && userID != wrk.OwnerID {
+		return nil, ErrProjectForbidden
+	}
+	// Cannot grant a role above your own, and only the workspace owner may
+	// grant project Owner.
+	if role > callerRole || (role >= model.RoleOwner && userID != wrk.OwnerID) {
+		return nil, ErrProjectForbidden
 	}
 	m.Role = role
 	if err := s.ps.UpdateProjectMember(ctx, m); err != nil {
@@ -223,9 +247,17 @@ func (s *ProjectService) DeleteMember(ctx context.Context, workspaceSlug string,
 	if err := s.requireProjectAdmin(ctx, p.WorkspaceID, p.ID, userID); err != nil {
 		return err
 	}
+	wrk, err := s.ws.GetByID(ctx, p.WorkspaceID)
+	if err != nil {
+		return ErrProjectNotFound
+	}
 	m, err := s.ps.GetProjectMemberByPK(ctx, memberPK)
 	if err != nil || m.ProjectID != projectID {
 		return ErrMemberNotFound
+	}
+	// The workspace owner's project membership cannot be removed by anyone.
+	if m.MemberID != nil && *m.MemberID == wrk.OwnerID {
+		return ErrProjectForbidden
 	}
 	if m.MemberID != nil {
 		return s.ps.DeleteProjectMember(ctx, projectID, *m.MemberID)
@@ -252,8 +284,18 @@ func (s *ProjectService) CreateInvite(ctx context.Context, workspaceSlug string,
 	if err != nil {
 		return nil, err
 	}
-	if err := s.requireProjectAdmin(ctx, p.WorkspaceID, p.ID, userID); err != nil {
+	callerRole, err := s.projectCallerRole(ctx, p.WorkspaceID, p.ID, userID)
+	if err != nil {
 		return nil, err
+	}
+	wrk, err := s.ws.GetByID(ctx, p.WorkspaceID)
+	if err != nil {
+		return nil, ErrProjectNotFound
+	}
+	// Cannot invite at a role above your own, and only the workspace owner
+	// may invite at project Owner.
+	if role > callerRole || (role >= model.RoleOwner && userID != wrk.OwnerID) {
+		return nil, ErrProjectForbidden
 	}
 	inv := &model.ProjectMemberInvite{
 		ProjectID:   p.ID,
