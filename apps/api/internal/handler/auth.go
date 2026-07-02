@@ -32,6 +32,7 @@ type AuthHandler struct {
 	Ws                *store.WorkspaceStore
 	NotifPrefs        *store.UserNotificationPreferenceStore
 	ApiTokens         *store.ApiTokenStore
+	InstanceAdmins    *store.InstanceAdminStore
 	Queue             *queue.Publisher
 	Redis             *redis.Client
 	MagicCodeSecret   string
@@ -232,7 +233,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
-	c.JSON(http.StatusOK, userResponse(user))
+	resp := userResponse(user)
+	if h.InstanceAdmins != nil {
+		isAdmin, _ := h.InstanceAdmins.IsAdmin(c.Request.Context(), user.ID)
+		resp["is_instance_admin"] = isAdmin
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // UpdateMeRequest is the body for PATCH /api/users/me/

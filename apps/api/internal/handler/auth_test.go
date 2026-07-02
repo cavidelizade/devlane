@@ -178,6 +178,21 @@ func TestAuth_Me_ReturnsUser(t *testing.T) {
 	body := testutil.MustJSONMap(t, rr)
 	assert.Equal(t, "me@test.local", body["email"])
 	assert.Equal(t, user.ID.String(), body["id"])
+	assert.Equal(t, false, body["is_instance_admin"])
+}
+
+// TestAuth_Me_IsInstanceAdminTrueForAdmin proves /api/users/me/ reports
+// is_instance_admin: true for an actual instance admin (#163's frontend fix
+// gates the instance-admin UI on this field).
+func TestAuth_Me_IsInstanceAdminTrueForAdmin(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	user := testutil.CreateUser(t, ts.DB)
+	testutil.SeedInstanceAdmin(t, ts.DB, user)
+	session := testutil.LoginAs(t, ts.DB, user)
+
+	rr := ts.GET("/api/users/me/", session)
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+	assert.Equal(t, true, testutil.MustJSONMap(t, rr)["is_instance_admin"])
 }
 
 func TestAuth_UpdateMe_PatchProfile(t *testing.T) {

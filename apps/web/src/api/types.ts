@@ -284,6 +284,7 @@ export interface UserApiResponse {
   is_active: boolean;
   is_onboarded: boolean;
   is_password_autoset?: boolean;
+  is_instance_admin?: boolean;
   date_joined: string;
   created_at: string;
   updated_at: string;
@@ -744,11 +745,7 @@ export interface PageVersionApiResponse {
  * Reason a notification was created. Server-set; drives how the inbox row renders.
  */
 export type NotificationSender =
-  | 'assigned'
-  | 'mentioned'
-  | 'commented'
-  | 'state_changed'
-  | 'subscribed';
+  'assigned' | 'mentioned' | 'commented' | 'state_changed' | 'subscribed';
 
 /** Structured payload the API attaches to every notification — denormalised so
  * the inbox can render N rows without N round-trips. Field set varies by sender. */

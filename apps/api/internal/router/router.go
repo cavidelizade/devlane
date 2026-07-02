@@ -108,6 +108,7 @@ func New(cfg Config) *gin.Engine {
 		Ws:                workspaceStore,
 		NotifPrefs:        userNotifPrefStore,
 		ApiTokens:         apiTokenStore,
+		InstanceAdmins:    instanceAdminStore,
 		Queue:             cfg.Queue,
 		Redis:             cfg.Redis,
 		MagicCodeSecret:   cfg.MagicCodeSecret,

@@ -24,6 +24,7 @@ function mapApiUserToUser(api: UserApiResponse): User {
     name,
     avatarUrl: api.avatar ?? null,
     coverImageUrl: api.cover_image ?? null,
+    isInstanceAdmin: api.is_instance_admin ?? false,
   };
 }
 
