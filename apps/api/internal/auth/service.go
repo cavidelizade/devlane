@@ -66,6 +66,7 @@ type Service struct {
 	sessionStore    *store.SessionStore
 	resetTokenStore *store.PasswordResetTokenStore
 	accountStore    *store.AccountStore
+	apiTokenStore   *store.ApiTokenStore
 }
 
 func NewService(userStore *store.UserStore, sessionStore *store.SessionStore, resetTokenStore *store.PasswordResetTokenStore) *Service {
@@ -73,6 +74,8 @@ func NewService(userStore *store.UserStore, sessionStore *store.SessionStore, re
 }
 
 func (s *Service) SetAccountStore(as *store.AccountStore) { s.accountStore = as }
+
+func (s *Service) SetApiTokenStore(ts *store.ApiTokenStore) { s.apiTokenStore = ts }
 
 type SignUpRequest struct {
 	Email     string `json:"email" binding:"required,email"`
@@ -261,6 +264,26 @@ func (s *Service) ActiveUserByID(ctx context.Context, id uuid.UUID) (*model.User
 	if err != nil || user == nil || !user.IsActive {
 		return nil, nil
 	}
+	return user, nil
+}
+
+// UserFromAPIToken validates a bearer value as an API token (hashed +
+// looked up, active/unexpired), returning the active user if valid, or nil
+// if the value isn't a recognized token (not an error — callers should fall
+// back to other bearer interpretations).
+func (s *Service) UserFromAPIToken(ctx context.Context, plain string) (*model.User, error) {
+	if s.apiTokenStore == nil {
+		return nil, nil
+	}
+	tok, err := s.apiTokenStore.GetActiveByHash(ctx, store.HashToken(plain))
+	if err != nil || tok == nil {
+		return nil, nil
+	}
+	user, err := s.ActiveUserByID(ctx, tok.UserID)
+	if err != nil || user == nil {
+		return nil, nil
+	}
+	_ = s.apiTokenStore.UpdateLastUsed(ctx, tok.ID)
 	return user, nil
 }
 

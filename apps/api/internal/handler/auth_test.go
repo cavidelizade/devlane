@@ -338,6 +338,28 @@ func TestAuth_ApiToken_AuthenticatesRequests(t *testing.T) {
 	assert.Equal(t, user.ID.String(), testutil.MustJSONMap(t, rr2)["id"])
 }
 
+// TestAuth_ApiToken_ValidEvenWithStaleCookiePresent proves a stale/invalid
+// session cookie sent alongside a valid API token Bearer header doesn't mask
+// the token (a bug caught in code review: an if/else-if between cookie and
+// bearer meant any cookie, even an invalid one, skipped the bearer check).
+func TestAuth_ApiToken_ValidEvenWithStaleCookiePresent(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	user := testutil.CreateUser(t, ts.DB)
+	session := testutil.LoginAs(t, ts.DB, user)
+
+	rr := ts.POST("/api/users/me/tokens/", map[string]any{"label": "ci-token"}, session)
+	require.Equal(t, http.StatusCreated, rr.Code, "body=%s", rr.Body.String())
+	plainToken, _ := testutil.MustJSONMap(t, rr)["token"].(string)
+	require.NotEmpty(t, plainToken)
+
+	rr2 := ts.DoWithHeaders(http.MethodGet, "/api/users/me/", nil, http.Header{
+		"Authorization": []string{"Bearer " + plainToken},
+		"Cookie":        []string{"session_id=this-is-not-a-real-session"},
+	})
+	require.Equal(t, http.StatusOK, rr2.Code, "body=%s", rr2.Body.String())
+	assert.Equal(t, user.ID.String(), testutil.MustJSONMap(t, rr2)["id"])
+}
+
 // TestAuth_ApiToken_RevokedRejected proves a revoked token no longer
 // authenticates.
 func TestAuth_ApiToken_RevokedRejected(t *testing.T) {
