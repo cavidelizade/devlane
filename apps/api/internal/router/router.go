@@ -56,7 +56,7 @@ func New(cfg Config) *gin.Engine {
 
 	// Health (no auth)
 	r.GET("/health", handler.Health)
-	r.GET("/ready", handler.Readiness)
+	r.GET("/ready", handler.NewReadinessHandler(cfg.DB))
 
 	// Stores
 	userStore := store.NewUserStore(cfg.DB)
