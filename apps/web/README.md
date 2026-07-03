@@ -13,8 +13,9 @@ Router 7).
 
 1. `npm install`
 2. `npm run dev` — starts the Vite dev server on `http://localhost:5173` by
-   default, proxying API calls to `http://localhost:8080` (see
-   `src/api/client.ts`).
+   default. API calls go directly (no dev-server proxy) to
+   `http://localhost:8080` unless `VITE_API_BASE_URL` is set (see
+   `src/api/client.ts`); the API must allow that origin via `CORS_ORIGIN`.
 3. On first run, complete instance setup in the browser (create the admin
    account, then a workspace and project).
 
