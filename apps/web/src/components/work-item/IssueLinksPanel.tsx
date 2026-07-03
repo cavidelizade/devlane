@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Card, CardContent, CardHeader } from '../ui';
 import { issueService } from '../../services/issueService';
 import { safeUrl } from '../../lib/sanitize';
@@ -10,7 +10,7 @@ interface IssueLinksPanelProps {
   projectId: string;
   issueId: string;
   links: IssueLinkApiResponse[];
-  onLinksChange: (links: IssueLinkApiResponse[]) => void;
+  onLinksChange: Dispatch<SetStateAction<IssueLinkApiResponse[]>>;
 }
 
 /** Right-rail "Links" card: inline add-link form plus the list of existing links. */
@@ -59,7 +59,7 @@ export function IssueLinksPanel({
                   url: addLinkUrl.trim(),
                   title: addLinkTitle.trim() || undefined,
                 });
-                onLinksChange([...links, created]);
+                onLinksChange((prev) => [...prev, created]);
                 setAddLinkOpen(false);
               } catch {
                 /* ignore */
@@ -121,7 +121,7 @@ export function IssueLinksPanel({
                   await issueService
                     .deleteLink(workspaceSlug, projectId, issueId, l.id)
                     .catch(() => {});
-                  onLinksChange(links.filter((x) => x.id !== l.id));
+                  onLinksChange((prev) => prev.filter((x) => x.id !== l.id));
                 }}
                 className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-(--txt-tertiary) hover:text-(--txt-danger-primary)"
                 title="Remove link"

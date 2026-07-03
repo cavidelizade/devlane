@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Card, CardContent, CardHeader } from '../ui';
 import { issueService } from '../../services/issueService';
 import type { IssueAttachmentApiResponse } from '../../api/types';
@@ -9,7 +9,7 @@ interface IssueAttachmentsPanelProps {
   projectId: string;
   issueId: string;
   attachments: IssueAttachmentApiResponse[];
-  onAttachmentsChange: (attachments: IssueAttachmentApiResponse[]) => void;
+  onAttachmentsChange: Dispatch<SetStateAction<IssueAttachmentApiResponse[]>>;
 }
 
 /** Right-rail "Attachments" card: upload via presigned URL, list, and delete. */
@@ -114,7 +114,7 @@ export function IssueAttachmentsPanel({
                       issueId,
                       att.asset_id,
                     );
-                    onAttachmentsChange(attachments.filter((x) => x.id !== att.id));
+                    onAttachmentsChange((prev) => prev.filter((x) => x.id !== att.id));
                   } catch {
                     /* ignore */
                   }

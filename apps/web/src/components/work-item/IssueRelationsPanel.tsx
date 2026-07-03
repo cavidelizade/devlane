@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../ui';
 import { issueService } from '../../services/issueService';
@@ -17,7 +17,7 @@ interface IssueRelationsPanelProps {
   baseUrl: string;
   allIssues: IssueApiResponse[];
   relations: IssueRelationApiResponse;
-  onRelationsChange: (relations: IssueRelationApiResponse) => void;
+  onRelationsChange: Dispatch<SetStateAction<IssueRelationApiResponse>>;
 }
 
 /** Right-rail "Relations" card: inline add-relation form plus the list grouped by relation type. */
@@ -156,10 +156,10 @@ export function IssueRelationsPanel({
                           await issueService
                             .removeRelation(workspaceSlug, projectId, issueId, rtype, rel.id)
                             .catch(() => {});
-                          onRelationsChange({
-                            ...relations,
-                            [rtype]: relations[rtype].filter((x) => x.id !== rel.id),
-                          });
+                          onRelationsChange((prev) => ({
+                            ...prev,
+                            [rtype]: prev[rtype].filter((x) => x.id !== rel.id),
+                          }));
                         }}
                         className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-(--txt-tertiary) hover:text-(--txt-danger-primary)"
                         title="Remove"
