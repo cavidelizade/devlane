@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Archive, ArchiveRestore, Layers, FolderInput } from 'lucide-react';
-import { Button, Card, CardContent, CardHeader, Avatar, Modal } from '../components/ui';
+import { Archive, ArchiveRestore, Layers } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, Avatar } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { Dropdown, DatePickerTrigger, CommentEditor } from '../components/work-item';
-import { sanitizeHtml, safeUrl } from '../lib/sanitize';
+import { sanitizeHtml } from '../lib/sanitize';
 import { DescriptionEditor } from '../components/work-item/DescriptionEditor';
 import { IssueReactions } from '../components/work-item/IssueReactions';
 import { IssueActivityFeed } from '../components/work-item/IssueActivityFeed';
@@ -21,12 +21,31 @@ import { recentsService } from '../services/recentsService';
 import { commentService } from '../services/commentService';
 import { CreateWorkItemModal } from '../components/CreateWorkItemModal';
 import { IssuePRSidebar } from '../components/work-item/IssuePRSidebar';
+import { IssueLinksPanel } from '../components/work-item/IssueLinksPanel';
+import { IssueRelationsPanel } from '../components/work-item/IssueRelationsPanel';
+import { IssueAttachmentsPanel } from '../components/work-item/IssueAttachmentsPanel';
+import { MoveWorkItemModal } from '../components/work-item/MoveWorkItemModal';
 import { SubscribeButton } from '../components/notifications/SubscribeButton';
 import {
   PriorityIcon,
   StatePill,
   WorkItemAvatarGroup,
 } from '../components/work-item/IssueRowCells';
+import {
+  PropertyRow,
+  IconPlus,
+  IconTag,
+  IconUser,
+  IconFlag,
+  IconCalendar,
+  IconStack,
+  IconCycle,
+  IconType,
+  IconEstimate,
+  CommentLockIcon,
+  BotGitHubIcon,
+  WORK_ITEM_TYPES,
+} from '../components/work-item/issue-detail-icons';
 import { membersFromAssigneeIds } from '../lib/issueRowHelpers';
 import { getImageUrl } from '../lib/utils';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
@@ -45,7 +64,6 @@ import type {
   IssueLinkApiResponse,
   IssueRelationApiResponse,
   IssueAttachmentApiResponse,
-  IssueRelationType,
 } from '../api/types';
 import type { Priority } from '../types';
 
@@ -57,236 +75,6 @@ import type { Priority } from '../types';
  */
 const GHOST_TRIGGER =
   'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-(--radius-md) px-2 py-1.5 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)';
-
-/** One row in the Properties sidebar: fixed-width label on the left, value right-aligned. */
-function PropertyRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 py-0.5">
-      <div className="flex w-32 shrink-0 items-center gap-1.5 text-xs text-(--txt-tertiary)">
-        <span className="shrink-0 text-(--txt-icon-tertiary)">{icon}</span>
-        <span>{label}</span>
-      </div>
-      <div className="flex grow min-w-0 justify-end">{children}</div>
-    </div>
-  );
-}
-
-const IconPlus = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M5 12h14" />
-    <path d="M12 5v14" />
-  </svg>
-);
-const IconTag = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-  </svg>
-);
-const IconUser = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-const IconFlag = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M4 22V4" />
-    <path d="M4 4h11l-1 5 1 5H4" />
-  </svg>
-);
-const IconCalendar = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
-const IconStack = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="m12 2 10 6-10 6L2 8l10-6Z" />
-    <path d="m2 14 10 6 10-6" />
-  </svg>
-);
-const IconCycle = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
-    <path d="M21 3v5h-5" />
-  </svg>
-);
-const IconLink = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-const IconRelation = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="m6 17 5-5-5-5" />
-    <path d="m13 17 5-5-5-5" />
-  </svg>
-);
-const IconPaperclip = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-  </svg>
-);
-const IconType = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <polyline points="4 7 4 4 20 4 20 7" />
-    <line x1="9" y1="20" x2="15" y2="20" />
-    <line x1="12" y1="4" x2="12" y2="20" />
-  </svg>
-);
-
-const IconEstimate = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    aria-hidden
-  >
-    <path d="M12 14a6 6 0 1 0-6-6" />
-    <path d="M6 8H2" />
-    <path d="m12 14 3-3" />
-    <circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none" />
-  </svg>
-);
-
-const WORK_ITEM_TYPES = [
-  { value: 'task', label: 'Task' },
-  { value: 'bug', label: 'Bug' },
-  { value: 'feature', label: 'Feature' },
-  { value: 'story', label: 'Story' },
-  { value: 'chore', label: 'Chore' },
-] as const;
-
-const RELATION_TYPE_LABELS: Record<string, string> = {
-  blocking: 'Blocking',
-  blocked_by: 'Blocked by',
-  duplicate: 'Duplicate',
-  relates_to: 'Relates to',
-};
-/** Tiny lock icon used to mark internal comments. */
-const CommentLockIcon = () => (
-  <svg
-    width="11"
-    height="11"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.4"
-    aria-hidden
-  >
-    <rect width="18" height="11" x="3" y="11" rx="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-/** GitHub mark — used as the avatar for bot-posted comments. */
-const BotGitHubIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-  </svg>
-);
 
 export function IssueDetailPage() {
   const { user: currentUser } = useAuth();
@@ -321,10 +109,6 @@ export function IssueDetailPage() {
   const [pendingStateId, setPendingStateId] = useState<string | null>(null);
   // Links
   const [links, setLinks] = useState<IssueLinkApiResponse[]>([]);
-  const [addLinkOpen, setAddLinkOpen] = useState(false);
-  const [addLinkUrl, setAddLinkUrl] = useState('');
-  const [addLinkTitle, setAddLinkTitle] = useState('');
-  const [addingLink, setAddingLink] = useState(false);
   // Relations
   const [relations, setRelations] = useState<IssueRelationApiResponse>({
     blocking: [],
@@ -332,19 +116,8 @@ export function IssueDetailPage() {
     duplicate: [],
     relates_to: [],
   });
-  const [addRelationOpen, setAddRelationOpen] = useState(false);
-  const [addRelationType, setAddRelationType] = useState<IssueRelationType>('relates_to');
-  const [addRelationSearch, setAddRelationSearch] = useState('');
-  const [addingRelation, setAddingRelation] = useState(false);
   // Attachments
   const [attachments, setAttachments] = useState<IssueAttachmentApiResponse[]>([]);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  // Move to another project
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [moveProjects, setMoveProjects] = useState<ProjectApiResponse[]>([]);
-  const [moveLoading, setMoveLoading] = useState(false);
-  const [moveSubmitting, setMoveSubmitting] = useState(false);
-  const [moveError, setMoveError] = useState<string | null>(null);
 
   useDocumentTitle(loading ? 'Work item' : (issue?.name ?? 'Work item'));
 
@@ -524,39 +297,6 @@ export function IssueDetailPage() {
     }
   };
 
-  const openMove = async () => {
-    if (!workspaceSlug) return;
-    setMoveOpen(true);
-    setMoveError(null);
-    setMoveLoading(true);
-    try {
-      const list = await projectService.list(workspaceSlug);
-      setMoveProjects(list.filter((p) => p.id !== project.id));
-    } catch {
-      setMoveError('Failed to load projects.');
-    } finally {
-      setMoveLoading(false);
-    }
-  };
-
-  const handleMove = async (targetProjectId: string) => {
-    if (!workspaceSlug || !projectId || !issueId) return;
-    setMoveSubmitting(true);
-    setMoveError(null);
-    try {
-      await issueService.move(workspaceSlug, projectId, issueId, targetProjectId);
-      setMoveOpen(false);
-      navigate(`/${workspace.slug}/projects/${targetProjectId}/issues/${issueId}`);
-    } catch (err) {
-      const apiError =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : null;
-      setMoveError(apiError ?? 'Failed to move work item.');
-    } finally {
-      setMoveSubmitting(false);
-    }
-  };
   const descriptionHtml =
     issue.description_html && typeof issue.description_html === 'string'
       ? issue.description_html
@@ -747,15 +487,15 @@ export function IssueDetailPage() {
               Convert to epic
             </button>
           ) : null}
-          {!issue.is_epic && !issue.archived_at ? (
-            <button
-              type="button"
-              onClick={() => void openMove()}
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover)"
-            >
-              <FolderInput className="h-3.5 w-3.5" />
-              Move
-            </button>
+          {!issue.is_epic && !issue.archived_at && workspaceSlug ? (
+            <MoveWorkItemModal
+              workspaceSlug={workspaceSlug}
+              currentProjectId={project.id}
+              issueId={issue.id}
+              onMoved={(targetProjectId) =>
+                navigate(`/${workspace.slug}/projects/${targetProjectId}/issues/${issue.id}`)
+              }
+            />
           ) : null}
           {issue.archived_at ? (
             <button
@@ -1005,373 +745,38 @@ export function IssueDetailPage() {
             />
           )}
 
-          {/* ── Links ── */}
-          <Card>
-            <CardHeader className="flex items-center justify-between text-sm font-medium text-(--txt-secondary)">
-              <span className="flex items-center gap-1.5">
-                <IconLink />
-                Links
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddLinkOpen((v) => !v);
-                  setAddLinkUrl('');
-                  setAddLinkTitle('');
-                }}
-                className="rounded p-0.5 text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover)"
-                title="Add link"
-              >
-                <IconPlus />
-              </button>
-            </CardHeader>
-            <CardContent className="space-y-1 pt-2">
-              {addLinkOpen && (
-                <form
-                  className="space-y-1.5 pb-2"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!addLinkUrl.trim() || !workspaceSlug) return;
-                    setAddingLink(true);
-                    try {
-                      const created = await issueService.createLink(
-                        workspaceSlug,
-                        project.id,
-                        issue.id,
-                        { url: addLinkUrl.trim(), title: addLinkTitle.trim() || undefined },
-                      );
-                      setLinks((prev) => [...prev, created]);
-                      setAddLinkOpen(false);
-                    } catch {
-                      /* ignore */
-                    }
-                    setAddingLink(false);
-                  }}
-                >
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={addLinkUrl}
-                    onChange={(e) => setAddLinkUrl(e.target.value)}
-                    required
-                    className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-canvas) px-2 py-1 text-xs text-(--txt-primary) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Title (optional)"
-                    value={addLinkTitle}
-                    onChange={(e) => setAddLinkTitle(e.target.value)}
-                    className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-canvas) px-2 py-1 text-xs text-(--txt-primary) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
-                  />
-                  <div className="flex gap-1">
-                    <button
-                      type="submit"
-                      disabled={addingLink}
-                      className="rounded-(--radius-md) bg-(--bg-accent-primary) px-2 py-1 text-xs text-white disabled:opacity-50"
-                    >
-                      {addingLink ? 'Adding…' : 'Add'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAddLinkOpen(false)}
-                      className="rounded-(--radius-md) px-2 py-1 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-              {links.length === 0 && !addLinkOpen ? (
-                <p className="text-xs text-(--txt-tertiary)">No links yet.</p>
-              ) : (
-                links.map((l) => (
-                  <div key={l.id} className="flex items-center gap-1 group">
-                    <a
-                      href={safeUrl(l.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="min-w-0 flex-1 truncate text-xs text-(--txt-accent-primary) hover:underline"
-                      title={l.url}
-                    >
-                      {l.title || l.url}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!workspaceSlug) return;
-                        await issueService
-                          .deleteLink(workspaceSlug, project.id, issue.id, l.id)
-                          .catch(() => {});
-                        setLinks((prev) => prev.filter((x) => x.id !== l.id));
-                      }}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-(--txt-tertiary) hover:text-(--txt-danger-primary)"
-                      title="Remove link"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          {workspaceSlug && (
+            <IssueLinksPanel
+              workspaceSlug={workspaceSlug}
+              projectId={project.id}
+              issueId={issue.id}
+              links={links}
+              onLinksChange={setLinks}
+            />
+          )}
 
-          {/* ── Relations ── */}
-          <Card>
-            <CardHeader className="flex items-center justify-between text-sm font-medium text-(--txt-secondary)">
-              <span className="flex items-center gap-1.5">
-                <IconRelation />
-                Relations
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddRelationOpen((v) => !v);
-                  setAddRelationSearch('');
-                }}
-                className="rounded p-0.5 text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover)"
-                title="Add relation"
-              >
-                <IconPlus />
-              </button>
-            </CardHeader>
-            <CardContent className="space-y-2 pt-2">
-              {addRelationOpen && (
-                <div className="space-y-1.5 pb-2">
-                  <select
-                    value={addRelationType}
-                    onChange={(e) => setAddRelationType(e.target.value as IssueRelationType)}
-                    className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-canvas) px-2 py-1 text-xs text-(--txt-primary) focus:outline-none"
-                  >
-                    {Object.entries(RELATION_TYPE_LABELS).map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Search issues…"
-                    value={addRelationSearch}
-                    onChange={(e) => setAddRelationSearch(e.target.value)}
-                    className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-canvas) px-2 py-1 text-xs text-(--txt-primary) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
-                  />
-                  <div className="max-h-40 overflow-y-auto space-y-0.5">
-                    {allIssues
-                      .filter(
-                        (i) =>
-                          i.id !== issue.id &&
-                          (addRelationSearch === '' ||
-                            i.name.toLowerCase().includes(addRelationSearch.toLowerCase())),
-                      )
-                      .slice(0, 20)
-                      .map((candidate) => (
-                        <button
-                          key={candidate.id}
-                          type="button"
-                          disabled={addingRelation}
-                          className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-1 text-left text-xs hover:bg-(--bg-layer-1-hover) disabled:opacity-50"
-                          onClick={async () => {
-                            if (!workspaceSlug) return;
-                            setAddingRelation(true);
-                            try {
-                              await issueService.addRelation(
-                                workspaceSlug,
-                                project.id,
-                                issue.id,
-                                addRelationType,
-                                [candidate.id],
-                              );
-                              const updated = await issueService.listRelations(
-                                workspaceSlug,
-                                project.id,
-                                issue.id,
-                              );
-                              setRelations(updated);
-                              setAddRelationOpen(false);
-                            } catch {
-                              /* ignore */
-                            }
-                            setAddingRelation(false);
-                          }}
-                        >
-                          <span className="shrink-0 text-[11px] font-medium text-(--txt-accent-primary)">
-                            {project.identifier ?? project.id.slice(0, 6)}-{candidate.sequence_id}
-                          </span>
-                          <span className="truncate text-(--txt-primary)">{candidate.name}</span>
-                        </button>
-                      ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAddRelationOpen(false)}
-                    className="text-xs text-(--txt-tertiary) hover:text-(--txt-secondary)"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-              {(['blocking', 'blocked_by', 'duplicate', 'relates_to'] as IssueRelationType[]).map(
-                (rtype) => {
-                  const group = relations[rtype];
-                  if (!group?.length) return null;
-                  return (
-                    <div key={rtype}>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-(--txt-tertiary)">
-                        {RELATION_TYPE_LABELS[rtype]}
-                      </p>
-                      <div className="space-y-0.5">
-                        {group.map((rel) => (
-                          <div key={rel.id} className="flex items-center gap-1 group">
-                            <Link
-                              to={`${baseUrl}/issues/${rel.id}`}
-                              className="min-w-0 flex-1 truncate text-xs text-(--txt-accent-primary) hover:underline"
-                            >
-                              {project.identifier ?? project.id.slice(0, 6)}-{rel.sequence_id}{' '}
-                              {rel.name}
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!workspaceSlug) return;
-                                await issueService
-                                  .removeRelation(
-                                    workspaceSlug,
-                                    project.id,
-                                    issue.id,
-                                    rtype,
-                                    rel.id,
-                                  )
-                                  .catch(() => {});
-                                setRelations((prev) => ({
-                                  ...prev,
-                                  [rtype]: prev[rtype].filter((x) => x.id !== rel.id),
-                                }));
-                              }}
-                              className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-(--txt-tertiary) hover:text-(--txt-danger-primary)"
-                              title="Remove"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                },
-              )}
-              {!addRelationOpen && Object.values(relations).every((g) => !g?.length) && (
-                <p className="text-xs text-(--txt-tertiary)">No relations yet.</p>
-              )}
-            </CardContent>
-          </Card>
+          {workspaceSlug && (
+            <IssueRelationsPanel
+              workspaceSlug={workspaceSlug}
+              projectId={project.id}
+              projectIdentifier={project.identifier ?? project.id.slice(0, 6)}
+              issueId={issue.id}
+              baseUrl={baseUrl}
+              allIssues={allIssues}
+              relations={relations}
+              onRelationsChange={setRelations}
+            />
+          )}
 
-          {/* ── Attachments ── */}
-          <Card>
-            <CardHeader className="flex items-center justify-between text-sm font-medium text-(--txt-secondary)">
-              <span className="flex items-center gap-1.5">
-                <IconPaperclip />
-                Attachments
-              </span>
-              <label
-                className="cursor-pointer rounded p-0.5 text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover)"
-                title="Upload file"
-              >
-                <IconPlus />
-                <input
-                  type="file"
-                  className="sr-only"
-                  disabled={uploadingAttachment}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file || !workspaceSlug) return;
-                    setUploadingAttachment(true);
-                    try {
-                      const resp = await issueService.initiateAttachmentUpload(
-                        workspaceSlug,
-                        project.id,
-                        issue.id,
-                        { name: file.name, size: file.size, type: file.type },
-                      );
-                      // Upload file to the presigned URL
-                      const formData = new FormData();
-                      Object.entries(resp.upload_data.fields ?? {}).forEach(([k, v]) =>
-                        formData.append(k, v),
-                      );
-                      formData.append('file', file);
-                      const uploadResp = await fetch(resp.upload_data.url, {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'omit',
-                      });
-                      if (!uploadResp.ok) throw new Error(`Upload failed: ${uploadResp.status}`);
-                      await issueService.confirmAttachmentUpload(
-                        workspaceSlug,
-                        project.id,
-                        issue.id,
-                        resp.asset_id,
-                      );
-                      const refreshed = await issueService.listAttachments(
-                        workspaceSlug,
-                        project.id,
-                        issue.id,
-                      );
-                      setAttachments(refreshed);
-                    } catch {
-                      /* ignore — 503 if MinIO not configured */
-                    }
-                    setUploadingAttachment(false);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </CardHeader>
-            <CardContent className="space-y-1 pt-2">
-              {uploadingAttachment && <p className="text-xs text-(--txt-tertiary)">Uploading…</p>}
-              {attachments.length === 0 && !uploadingAttachment ? (
-                <p className="text-xs text-(--txt-tertiary)">No attachments yet.</p>
-              ) : (
-                attachments.map((att) => (
-                  <div key={att.id} className="flex items-center gap-1 group">
-                    <a
-                      href={att.asset_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="min-w-0 flex-1 truncate text-xs text-(--txt-accent-primary) hover:underline"
-                      title={att.attributes?.name}
-                    >
-                      {att.attributes?.name ?? 'Attachment'}
-                    </a>
-                    {att.attributes?.size != null && (
-                      <span className="shrink-0 text-[10px] text-(--txt-tertiary)">
-                        {(att.attributes.size / 1024).toFixed(0)}KB
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!workspaceSlug) return;
-                        try {
-                          await issueService.deleteAttachment(
-                            workspaceSlug,
-                            project.id,
-                            issue.id,
-                            att.asset_id,
-                          );
-                          setAttachments((prev) => prev.filter((x) => x.id !== att.id));
-                        } catch {
-                          /* ignore */
-                        }
-                      }}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-(--txt-tertiary) hover:text-(--txt-danger-primary)"
-                      title="Delete"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          {workspaceSlug && (
+            <IssueAttachmentsPanel
+              workspaceSlug={workspaceSlug}
+              projectId={project.id}
+              issueId={issue.id}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+            />
+          )}
 
           <Card>
             <CardHeader className="text-sm font-medium text-(--txt-secondary)">
@@ -1969,45 +1374,6 @@ export function IssueDetailPage() {
             </div>
           );
         })()}
-
-      <Modal open={moveOpen} onClose={() => setMoveOpen(false)} title="Move work item to project">
-        <div className="space-y-3">
-          <p className="text-sm text-(--txt-tertiary)">
-            Choose a destination project. The work item gets a new ID there; its state, parent,
-            labels, and cycle/module links are cleared, and any sub-items are detached.
-          </p>
-          {moveError ? (
-            <p className="rounded-(--radius-md) bg-(--bg-danger-subtle) px-3 py-2 text-sm text-(--txt-danger)">
-              {moveError}
-            </p>
-          ) : null}
-          {moveLoading ? (
-            <p className="py-6 text-center text-sm text-(--txt-tertiary)">Loading projects…</p>
-          ) : moveProjects.length === 0 ? (
-            <p className="py-6 text-center text-sm text-(--txt-tertiary)">
-              No other projects available.
-            </p>
-          ) : (
-            <ul className="max-h-72 space-y-1 overflow-y-auto">
-              {moveProjects.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    disabled={moveSubmitting}
-                    onClick={() => void handleMove(p.id)}
-                    className="flex w-full items-center gap-2 rounded-(--radius-md) px-3 py-2 text-left text-sm text-(--txt-primary) transition-colors hover:bg-(--bg-layer-1-hover) disabled:opacity-50"
-                  >
-                    <span className="shrink-0 rounded-(--radius-sm) bg-(--bg-layer-2) px-1.5 py-0.5 text-xs font-medium text-(--txt-secondary)">
-                      {p.identifier ?? p.id.slice(0, 8)}
-                    </span>
-                    <span className="truncate">{p.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Modal>
 
       <CreateWorkItemModal
         open={subCreateOpen}
