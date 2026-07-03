@@ -43,6 +43,30 @@ func TestWorkspace_JoinByToken_AcceptsEmailMatch(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
 }
 
+// TestWorkspace_JoinByToken_AllowsRejoinAfterRemoval proves a user who was
+// previously removed from a workspace (leaving a soft-deleted membership
+// row) can rejoin via a fresh invite, instead of hitting the
+// UNIQUE(workspace_id, member_id) constraint against the old row.
+func TestWorkspace_JoinByToken_AllowsRejoinAfterRemoval(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	owner := testutil.CreateUser(t, ts.DB)
+	w := testutil.CreateWorkspace(t, ts.DB, owner.ID)
+
+	rejoiner := testutil.CreateUser(t, ts.DB)
+	testutil.AddWorkspaceMember(t, ts.DB, w.ID, rejoiner.ID, testutil.RoleMember)
+	require.NoError(t, ts.DB.WithContext(context.Background()).
+		Where("workspace_id = ? AND member_id = ?", w.ID, rejoiner.ID).
+		Delete(&model.WorkspaceMember{}).Error)
+
+	email := rejoiner.Email
+	require.NotNil(t, email)
+	inv := testutil.CreateWorkspaceInvite(t, ts.DB, w.ID, *email, "tok-rejoin-111")
+	session := testutil.LoginAs(t, ts.DB, rejoiner)
+
+	rr := ts.POST("/api/workspaces/join/", map[string]any{"token": inv.Token}, session)
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+}
+
 func TestProject_JoinByToken_RejectsEmailMismatch(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	owner := testutil.CreateUser(t, ts.DB)
@@ -86,6 +110,38 @@ func TestProject_JoinByToken_AcceptsEmailMatch(t *testing.T) {
 	require.NoError(t, ts.DB.WithContext(context.Background()).Create(inv).Error)
 
 	session := testutil.LoginAs(t, ts.DB, invitee)
+	rr := ts.POST("/api/workspaces/"+w.Slug+"/projects/join/", map[string]any{"token": inv.Token}, session)
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+}
+
+// TestProject_JoinByToken_AllowsRejoinAfterRemoval mirrors the workspace
+// version: a soft-deleted project_members row for the same (project, member)
+// must not block rejoining via a fresh invite.
+func TestProject_JoinByToken_AllowsRejoinAfterRemoval(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	owner := testutil.CreateUser(t, ts.DB)
+	w := testutil.CreateWorkspace(t, ts.DB, owner.ID)
+	p := testutil.CreateProject(t, ts.DB, w.ID, owner.ID)
+
+	rejoiner := testutil.CreateUser(t, ts.DB)
+	testutil.AddWorkspaceMember(t, ts.DB, w.ID, rejoiner.ID, testutil.RoleMember)
+	testutil.AddProjectMember(t, ts.DB, p.ID, w.ID, rejoiner.ID, testutil.RoleMember)
+	require.NoError(t, ts.DB.WithContext(context.Background()).
+		Where("project_id = ? AND member_id = ?", p.ID, rejoiner.ID).
+		Delete(&model.ProjectMember{}).Error)
+
+	email := rejoiner.Email
+	require.NotNil(t, email)
+	inv := &model.ProjectMemberInvite{
+		ProjectID:   p.ID,
+		WorkspaceID: w.ID,
+		Email:       *email,
+		Token:       "proj-tok-rejoin-111",
+		Role:        testutil.RoleMember,
+	}
+	require.NoError(t, ts.DB.WithContext(context.Background()).Create(inv).Error)
+
+	session := testutil.LoginAs(t, ts.DB, rejoiner)
 	rr := ts.POST("/api/workspaces/"+w.Slug+"/projects/join/", map[string]any{"token": inv.Token}, session)
 	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
 }

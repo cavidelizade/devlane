@@ -308,6 +308,26 @@ func (s *WorkspaceService) requireInviteEmailMatch(ctx context.Context, inviteEm
 	return nil
 }
 
+// upsertWorkspaceMember adds userID as a member of workspaceID, reviving a
+// previously soft-deleted membership row (e.g. from a past removal/leave)
+// instead of inserting a fresh one, since workspace_members has a plain
+// UNIQUE(workspace_id, member_id) constraint that a stale soft-deleted row
+// would otherwise violate.
+func upsertWorkspaceMember(tx *gorm.DB, workspaceID, userID uuid.UUID, role int16) error {
+	var existing model.WorkspaceMember
+	err := tx.Unscoped().Where("workspace_id = ? AND member_id = ?", workspaceID, userID).First(&existing).Error
+	if err == nil {
+		existing.DeletedAt = gorm.DeletedAt{}
+		existing.Role = role
+		return tx.Unscoped().Save(&existing).Error
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	m := &model.WorkspaceMember{WorkspaceID: workspaceID, MemberID: userID, Role: role}
+	return tx.Create(m).Error
+}
+
 func (s *WorkspaceService) JoinByToken(ctx context.Context, token string, userID uuid.UUID) (*model.Workspace, error) {
 	inv, err := s.winv.GetByToken(ctx, token)
 	if err != nil || inv == nil {
@@ -325,8 +345,7 @@ func (s *WorkspaceService) JoinByToken(ctx context.Context, token string, userID
 		if err := tx.Save(inv).Error; err != nil {
 			return err
 		}
-		m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
-		return tx.Create(m).Error
+		return upsertWorkspaceMember(tx, w.ID, userID, inv.Role)
 	}); err != nil {
 		return nil, err
 	}
@@ -351,8 +370,7 @@ func (s *WorkspaceService) JoinByInviteID(ctx context.Context, slug string, invi
 		if err := tx.Save(inv).Error; err != nil {
 			return err
 		}
-		m := &model.WorkspaceMember{WorkspaceID: w.ID, MemberID: userID, Role: inv.Role}
-		return tx.Create(m).Error
+		return upsertWorkspaceMember(tx, w.ID, userID, inv.Role)
 	}); err != nil {
 		return nil, err
 	}

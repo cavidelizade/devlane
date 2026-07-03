@@ -2,6 +2,8 @@ package redis
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -19,8 +21,10 @@ const (
 	PrefixRateLimit      = "ratelimit_"
 	// PrefixMagicCodeVerifyFail tracks failed magic-code verification attempts
 	// independently of the code's own TTL/Attempts field, so requesting a new
-	// code does not reset the lockout counter.
-	PrefixMagicCodeVerifyFail = "logincode_fail_"
+	// code does not reset the lockout counter. The email is hashed into the
+	// key (not concatenated raw) so it can never collide with a
+	// PrefixMagicCodeLogin key, regardless of email content.
+	PrefixMagicCodeVerifyFail = "mcvf_"
 )
 
 // Default TTLs.
@@ -253,6 +257,11 @@ func (c *Client) Allow(ctx context.Context, key string, limit int, window time.D
 		if err := c.Client.Expire(ctx, key, window).Err(); err != nil {
 			return false, err
 		}
+	} else if ttl, err := c.Client.TTL(ctx, key).Result(); err == nil && ttl < 0 {
+		// Safety net: if the very first increment's Expire call failed
+		// transiently, the key would otherwise never expire and could lock
+		// out its subject permanently. Recover the TTL on the next call.
+		_ = c.Client.Expire(ctx, key, window).Err()
 	}
 	return n <= int64(limit), nil
 }
@@ -270,7 +279,8 @@ func (c *Client) Count(ctx context.Context, key string) (int64, error) {
 // --- Magic-code verify-failure lockout (independent of the code's own TTL) ---
 
 func magicCodeVerifyFailKey(email string) string {
-	return PrefixMagicCodeVerifyFail + strings.ToLower(strings.TrimSpace(email))
+	sum := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(email))))
+	return PrefixMagicCodeVerifyFail + hex.EncodeToString(sum[:])
 }
 
 // MagicCodeVerifyFailCount peeks the current failed-verify count for email.

@@ -365,6 +365,26 @@ func (s *ProjectService) requireInviteEmailMatch(ctx context.Context, inviteEmai
 	return nil
 }
 
+// upsertProjectMember adds userID as a member of projectID, reviving a
+// previously soft-deleted membership row (e.g. from a past removal/leave)
+// instead of inserting a fresh one, since project_members has a plain
+// UNIQUE(project_id, member_id) constraint that a stale soft-deleted row
+// would otherwise violate.
+func upsertProjectMember(tx *gorm.DB, projectID, workspaceID, userID uuid.UUID, role int16) error {
+	var existing model.ProjectMember
+	err := tx.Unscoped().Where("project_id = ? AND member_id = ?", projectID, userID).First(&existing).Error
+	if err == nil {
+		existing.DeletedAt = gorm.DeletedAt{}
+		existing.Role = role
+		return tx.Unscoped().Save(&existing).Error
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	m := &model.ProjectMember{ProjectID: projectID, WorkspaceID: workspaceID, MemberID: &userID, Role: role}
+	return tx.Create(m).Error
+}
+
 func (s *ProjectService) JoinByToken(ctx context.Context, token string, userID uuid.UUID) (*model.Project, error) {
 	inv, err := s.pinv.GetByToken(ctx, token)
 	if err != nil || inv == nil {
@@ -382,8 +402,7 @@ func (s *ProjectService) JoinByToken(ctx context.Context, token string, userID u
 		if err := tx.Save(inv).Error; err != nil {
 			return err
 		}
-		m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
-		return tx.Create(m).Error
+		return upsertProjectMember(tx, p.ID, p.WorkspaceID, userID, inv.Role)
 	}); err != nil {
 		return nil, err
 	}
@@ -407,8 +426,7 @@ func (s *ProjectService) JoinByInviteID(ctx context.Context, workspaceSlug strin
 		if err := tx.Save(inv).Error; err != nil {
 			return err
 		}
-		m := &model.ProjectMember{ProjectID: p.ID, WorkspaceID: p.WorkspaceID, MemberID: &userID, Role: inv.Role}
-		return tx.Create(m).Error
+		return upsertProjectMember(tx, p.ID, p.WorkspaceID, userID, inv.Role)
 	}); err != nil {
 		return nil, err
 	}

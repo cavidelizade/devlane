@@ -122,11 +122,12 @@ func (h *AuthHandler) SignIn(c *gin.Context) {
 		}
 	}
 	ctx := c.Request.Context()
+	emailNorm := strings.ToLower(strings.TrimSpace(req.Email))
+	signinFailKey := redis.PrefixRateLimit + "signinacctfail:" + emailNorm
 	if h.Redis != nil {
-		emailNorm := strings.ToLower(strings.TrimSpace(req.Email))
-		ok, err := h.Redis.Allow(ctx, redis.PrefixRateLimit+"signinacct:"+emailNorm, 10, 15*time.Minute)
-		if err == nil && !ok {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many sign-in attempts for this account, please try again later"})
+		failCount, err := h.Redis.Count(ctx, signinFailKey)
+		if err == nil && failCount >= 10 {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many failed sign-in attempts for this account, please try again later"})
 			return
 		}
 	}
@@ -137,11 +138,17 @@ func (h *AuthHandler) SignIn(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, auth.ErrInvalidCredentials) {
+			if h.Redis != nil {
+				_, _ = h.Redis.Allow(ctx, signinFailKey, 10, 15*time.Minute)
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Sign in failed"})
 		return
+	}
+	if h.Redis != nil {
+		_ = h.Redis.Delete(ctx, signinFailKey)
 	}
 	setSessionCookie(c, sessionKey)
 	c.JSON(http.StatusOK, userResponse(user))
