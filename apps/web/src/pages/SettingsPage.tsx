@@ -12,7 +12,6 @@ import { useTheme, type ThemePreference } from '../contexts/ThemeContext';
 import { workspaceService } from '../services/workspaceService';
 import { ProjectNetworkSelect } from '../components/ProjectNetworkSelect';
 import { projectService } from '../services/projectService';
-import { issueService } from '../services/issueService';
 import { labelService } from '../services/labelService';
 import { stateService } from '../services/stateService';
 import { userService } from '../services/userService';
@@ -30,680 +29,42 @@ import type {
   UserActivityItem,
   ApiTokenResponse,
 } from '../api/types';
-
-// ---------------------------------------------------------------------------
-// Icons
-// ---------------------------------------------------------------------------
-
-const IconGrid = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <rect width="7" height="7" x="3" y="3" rx="1" />
-    <rect width="7" height="7" x="14" y="3" rx="1" />
-    <rect width="7" height="7" x="14" y="14" rx="1" />
-    <rect width="7" height="7" x="3" y="14" rx="1" />
-  </svg>
-);
-const IconUsers = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-const IconPlug = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M9 2v6" />
-    <path d="M15 2v6" />
-    <path d="M6 8h12v4a6 6 0 1 1-12 0V8Z" />
-    <path d="M12 18v4" />
-  </svg>
-);
-const IconUpload = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="17 8 12 3 7 8" />
-    <line x1="12" y1="3" x2="12" y2="15" />
-  </svg>
-);
-const IconWebhook = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M18 16.98h-5.99c-1.66 0-3.01-1.34-3.01-3s1.34-3 3.01-3h.5" />
-    <path d="M18 10.98h-5.99c-1.66 0-3.01-1.34-3.01-3s1.34-3 3.01-3h.5" />
-    <path d="M12 4v16" />
-    <path d="M6 4v16" />
-    <path d="M18 4v2" />
-    <path d="M18 20v2" />
-  </svg>
-);
-const IconPencil = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    <path d="m15 5 4 4" />
-  </svg>
-);
-const IconChevronDown = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="m6 9 6 6 6-6" />
-  </svg>
-);
-const IconChevronUp = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="m18 15-6-6-6 6" />
-  </svg>
-);
-const IconMoreVertical = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <circle cx="12" cy="5" r="1.5" />
-    <circle cx="12" cy="12" r="1.5" />
-    <circle cx="12" cy="19" r="1.5" />
-  </svg>
-);
-const IconSearch = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.3-4.3" />
-  </svg>
-);
-const IconPlus = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M5 12h14" />
-    <path d="M12 5v14" />
-  </svg>
-);
-const IconRefresh = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-  </svg>
-);
-const IconCog = () => (
-  <svg
-    width="48"
-    height="48"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-    className="opacity-40"
-  >
-    <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
-    <path d="M12 6v3" />
-    <path d="M12 15v3" />
-    <path d="m9.22 9.22 2.12 2.12" />
-    <path d="m12.66 15.34 2.12 2.12" />
-    <path d="m14.78 9.22-2.12 2.12" />
-    <path d="m11.34 15.34-2.12 2.12" />
-  </svg>
-);
-const IconPerson = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="12" cy="8" r="5" />
-    <path d="M20 21a8 8 0 0 0-16 0" />
-  </svg>
-);
-const IconGear = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
-    <path d="M12 6v3" />
-    <path d="M12 15v3" />
-    <path d="m9.22 9.22 2.12 2.12" />
-    <path d="m12.66 15.34 2.12 2.12" />
-    <path d="m14.78 9.22-2.12 2.12" />
-    <path d="m11.34 15.34-2.12 2.12" />
-  </svg>
-);
-const IconBell = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-  </svg>
-);
-const IconLock = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-const IconActivity = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-  </svg>
-);
-const IconKey = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="7.5" cy="15.5" r="5.5" />
-    <path d="m21 2-2 2" />
-    <path d="m13.5 7.5 2 2" />
-    <path d="m12 9-2 2" />
-    <path d="m15 6 2 2" />
-    <path d="m9 12 4 4 5-5" />
-  </svg>
-);
-const IconInfo = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="12" cy="12" r="10" />
-    <path d="M12 16v-4" />
-    <path d="M12 8h.01" />
-  </svg>
-);
-const IconEye = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-const IconEyeOff = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-    <line x1="2" y1="2" x2="22" y2="22" />
-  </svg>
-);
-function formatRelativeTime(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const s = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) {
-    const minutes = Math.floor(s / 60);
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
-  }
-  if (s < 86400) {
-    const hours = Math.floor(s / 3600);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  }
-  if (s < 2592000) {
-    const days = Math.floor(s / 86400);
-    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-  }
-  if (s < 31536000) {
-    const months = Math.floor(s / 2592000);
-    return `${months} ${months === 1 ? 'month' : 'months'} ago`;
-  }
-  const years = Math.floor(s / 31536000);
-  return `${years} ${years === 1 ? 'year' : 'years'} ago`;
-}
-
-// Build timezone options: UTC offset + label (e.g. "UTC-07:00 America/Los_Angeles")
-function getTimezoneOptions(): { value: string; label: string }[] {
-  try {
-    const ids =
-      typeof Intl !== 'undefined' &&
-      typeof (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf ===
-        'function'
-        ? (Intl as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf('timeZone')
-        : [
-            'UTC',
-            'America/New_York',
-            'America/Chicago',
-            'America/Denver',
-            'America/Los_Angeles',
-            'Europe/London',
-            'Europe/Paris',
-            'Asia/Tokyo',
-            'Asia/Kolkata',
-            'Australia/Sydney',
-          ];
-    const now = new Date();
-    return ids
-      .map((value) => {
-        try {
-          const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: value,
-            timeZoneName: 'longOffset',
-          });
-          const parts = formatter.formatToParts(now);
-          const offsetPart = parts.find((p) => p.type === 'timeZoneName');
-          const offset = offsetPart?.value ?? 'UTC';
-          return { value, label: `${offset} ${value}` };
-        } catch {
-          return { value, label: value };
-        }
-      })
-      .sort((a, b) => a.label.localeCompare(b.label));
-  } catch {
-    return [
-      { value: 'UTC', label: 'UTC UTC' },
-      { value: 'America/New_York', label: 'America/New York' },
-    ];
-  }
-}
-
-const IconMessageCircle = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z" />
-  </svg>
-);
-// Reserved for future nav/settings use:
-// const IconHome = () => ( <svg width="16" height="16" ...><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> );
-// const IconTruck = () => ( <svg ...><path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11" />...</svg> );
-const IconLayers = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-    <polyline points="2 17 12 22 22 17" />
-  </svg>
-);
-const IconFileText = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-    <path d="M10 9H8" />
-    <path d="M16 13H8" />
-    <path d="M16 17H8" />
-  </svg>
-);
-const IconInbox = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-  </svg>
-);
-const IconClock = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-const IconArchive = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <rect width="20" height="5" x="2" y="3" rx="1" />
-    <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-    <path d="M10 12h4" />
-  </svg>
-);
-const IconTrash = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-  </svg>
-);
-const IconLink = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-const IconTag = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-    <path d="M7 7h.01" />
-  </svg>
-);
-const IconZap = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M4 14l6 6 4-10 6 2-6-6-4 10-6-2z" />
-  </svg>
-);
-type WorkspaceSettingsSection = 'general' | 'members' | 'integrations' | 'exports' | 'webhooks';
-type ProjectSettingsSection =
-  | 'general'
-  | 'members'
-  | 'features'
-  | 'states'
-  | 'labels'
-  | 'estimates'
-  | 'automations';
-
-const PROJECT_SECTIONS: {
-  id: ProjectSettingsSection;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { id: 'general', label: 'General', icon: <IconGrid /> },
-  { id: 'members', label: 'Members', icon: <IconUsers /> },
-  { id: 'features', label: 'Features', icon: <IconZap /> },
-  { id: 'states', label: 'States', icon: <IconActivity /> },
-  { id: 'labels', label: 'Labels', icon: <IconTag /> },
-  { id: 'estimates', label: 'Estimates', icon: <IconClock /> },
-  { id: 'automations', label: 'Automations', icon: <IconArchive /> },
-];
-type AccountSettingsSection =
-  | 'profile'
-  | 'preferences'
-  | 'notifications'
-  | 'security'
-  | 'activity'
-  | 'tokens';
-
-const ACCOUNT_SECTIONS_PROFILE: {
-  id: AccountSettingsSection;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { id: 'profile', label: 'Profile', icon: <IconPerson /> },
-  { id: 'preferences', label: 'Preferences', icon: <IconGear /> },
-  { id: 'notifications', label: 'Notifications', icon: <IconBell /> },
-  { id: 'security', label: 'Security', icon: <IconLock /> },
-  { id: 'activity', label: 'Activity', icon: <IconActivity /> },
-];
-const ACCOUNT_SECTIONS_DEVELOPER: {
-  id: AccountSettingsSection;
-  label: string;
-  icon: React.ReactNode;
-}[] = [{ id: 'tokens', label: 'Personal Access Tokens', icon: <IconKey /> }];
-
-const WORKSPACE_SECTIONS: {
-  id: WorkspaceSettingsSection;
-  label: string;
-  icon: React.ReactNode;
-}[] = [
-  { id: 'general', label: 'General', icon: <IconGrid /> },
-  { id: 'members', label: 'Members', icon: <IconUsers /> },
-  { id: 'integrations', label: 'Integrations', icon: <IconPlug /> },
-  { id: 'exports', label: 'Exports', icon: <IconUpload /> },
-  { id: 'webhooks', label: 'Webhooks', icon: <IconWebhook /> },
-];
+import {
+  IconGrid,
+  IconPencil,
+  IconChevronDown,
+  IconChevronUp,
+  IconMoreVertical,
+  IconSearch,
+  IconPlus,
+  IconRefresh,
+  IconCog,
+  IconActivity,
+  IconInfo,
+  IconEye,
+  IconEyeOff,
+  IconMessageCircle,
+  IconLayers,
+  IconFileText,
+  IconInbox,
+  IconClock,
+  IconArchive,
+  IconTrash,
+  IconLink,
+} from '../components/settings/icons';
+import {
+  type WorkspaceSettingsSection,
+  type ProjectSettingsSection,
+  type AccountSettingsSection,
+} from '../components/settings/sections-config';
+import { SettingsNav } from '../components/settings/SettingsNav';
+import { ExportModal } from '../components/settings/modals/ExportModal';
+import { InviteModal } from '../components/settings/modals/InviteModal';
+import { ProjectStateModal } from '../components/settings/modals/ProjectStateModal';
+import { ProjectLabelModal } from '../components/settings/modals/ProjectLabelModal';
+import { formatRelativeTime, getTimezoneOptions } from '../lib/settingsHelpers';
 
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'];
-
 export function SettingsPage() {
   const { workspaceSlug, projectId: projectIdFromPath } = useParams<{
     workspaceSlug: string;
@@ -1283,181 +644,22 @@ export function SettingsPage() {
       {/* Layout: sidebar + main */}
       <div className="mt-6 flex gap-8">
         {/* Sidebar */}
-        <aside className="w-56 shrink-0 space-y-6">
-          {isAccountTab ? (
-            <>
-              <div className="flex items-center gap-2">
-                <Avatar name={user?.name ?? ''} src={getImageUrl(user?.avatarUrl)} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-(--txt-primary)">
-                    {displayName || user?.name}
-                  </p>
-                  <p className="truncate text-xs text-(--txt-tertiary)">{user?.email}</p>
-                </div>
-              </div>
-              <nav className="space-y-0.5">
-                <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wider text-(--txt-tertiary)">
-                  Your Profile
-                </p>
-                {ACCOUNT_SECTIONS_PROFILE.map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setAccountSection(id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
-                      accountSection === id
-                        ? 'bg-(--brand-200) text-(--txt-primary)'
-                        : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                    }`}
-                  >
-                    <span className="text-(--txt-icon-secondary)">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-                <p className="mb-2 mt-4 px-2 text-xs font-medium uppercase tracking-wider text-(--txt-tertiary)">
-                  Developer
-                </p>
-                {ACCOUNT_SECTIONS_DEVELOPER.map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setAccountSection(id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
-                      accountSection === id
-                        ? 'bg-(--brand-200) text-(--txt-primary)'
-                        : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                    }`}
-                  >
-                    <span className="text-(--txt-icon-secondary)">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </>
-          ) : isProjectsTab ? (
-            <>
-              <div className="flex items-center gap-2">
-                <Avatar
-                  name={workspace.name}
-                  src={getImageUrl(workspace?.logo) ?? undefined}
-                  size="sm"
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-(--txt-primary)">
-                    {workspace.name}
-                  </p>
-                  <p className="text-xs text-(--txt-tertiary)">Admin</p>
-                </div>
-              </div>
-              <nav className="space-y-0.5">
-                <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wider text-(--txt-tertiary)">
-                  Projects
-                </p>
-                {projects.map((proj) => {
-                  const isSelected = selectedProjectId === proj.id;
-                  return (
-                    <div key={proj.id} className="space-y-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setProjectId(proj.id)}
-                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
-                          isSelected
-                            ? 'bg-(--brand-200) text-(--txt-primary)'
-                            : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                        }`}
-                      >
-                        <span className="text-(--txt-icon-secondary) flex shrink-0 items-center justify-center">
-                          <ProjectIconDisplay
-                            emoji={proj.emoji}
-                            icon_prop={proj.icon_prop}
-                            size={16}
-                          />
-                        </span>
-                        <span className="min-w-0 truncate">{proj.name}</span>
-                        <span className="ml-auto shrink-0 text-xs text-(--txt-tertiary)">
-                          Admin
-                        </span>
-                      </button>
-                      {isSelected && (
-                        <div className="ml-4 space-y-0.5 border-l border-(--border-subtle) pl-2">
-                          {PROJECT_SECTIONS.map(({ id, label, icon }) => (
-                            <button
-                              key={id}
-                              type="button"
-                              onClick={() => setProjectSection(proj.id, id)}
-                              className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm font-medium transition-colors ${
-                                projectSection === id
-                                  ? 'bg-(--brand-200) text-(--txt-primary)'
-                                  : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                              }`}
-                            >
-                              <span className="text-(--txt-icon-secondary)">{icon}</span>
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </nav>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <Avatar
-                  name={workspace.name}
-                  src={getImageUrl(workspace?.logo) ?? undefined}
-                  size="sm"
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-(--txt-primary)">
-                    {workspace.name}
-                  </p>
-                  <p className="text-xs text-(--txt-tertiary)">Admin</p>
-                </div>
-              </div>
-              <nav className="space-y-0.5">
-                <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wider text-(--txt-tertiary)">
-                  Administration
-                </p>
-                {WORKSPACE_SECTIONS.slice(0, 4).map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
-                      section === id
-                        ? 'bg-(--brand-200) text-(--txt-primary)'
-                        : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                    }`}
-                  >
-                    <span className="text-(--txt-icon-secondary)">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-                <p className="mb-2 mt-4 px-2 text-xs font-medium uppercase tracking-wider text-(--txt-tertiary)">
-                  Developer
-                </p>
-                {WORKSPACE_SECTIONS.slice(4).map(({ id, label, icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors ${
-                      section === id
-                        ? 'bg-(--brand-200) text-(--txt-primary)'
-                        : 'text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)'
-                    }`}
-                  >
-                    <span className="text-(--txt-icon-secondary)">{icon}</span>
-                    {label}
-                  </button>
-                ))}
-              </nav>
-            </>
-          )}
-        </aside>
+        <SettingsNav
+          isAccountTab={isAccountTab}
+          isProjectsTab={isProjectsTab}
+          user={user}
+          displayName={displayName}
+          accountSection={accountSection}
+          setAccountSection={setAccountSection}
+          workspace={workspace}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          setProjectId={setProjectId}
+          projectSection={projectSection}
+          setProjectSection={setProjectSection}
+          section={section}
+          setSection={setSection}
+        />
 
         {/* Main content */}
         <main className="min-w-0 flex-1">
@@ -3823,428 +3025,74 @@ export function SettingsPage() {
       </div>
 
       {/* Export modal */}
-      <Modal
+      <ExportModal
         open={exportProjectOpen}
         onClose={() => !exporting && setExportProjectOpen(false)}
-        title={`Export ${exportFormat.toUpperCase()}`}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setExportProjectOpen(false)}
-              disabled={exporting}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={exporting}
-              onClick={async () => {
-                if (!workspaceSlug) return;
-                setExporting(true);
-                try {
-                  const projectIds =
-                    exportProjectValue === 'all' ? projects.map((p) => p.id) : [exportProjectValue];
-                  const allIssues: Array<
-                    Record<string, unknown> & {
-                      project_id?: string;
-                      project_name?: string;
-                    }
-                  > = [];
-                  const limit = 2000;
-                  for (const pid of projectIds) {
-                    const proj = projects.find((p) => p.id === pid);
-                    let offset = 0;
-                    while (true) {
-                      const issues = await issueService.list(workspaceSlug, pid, { limit, offset });
-                      if (!issues.length) break;
-                      for (const i of issues) {
-                        allIssues.push({
-                          ...i,
-                          project_id: pid,
-                          project_name: proj?.name,
-                        });
-                      }
-                      if (issues.length < limit) break;
-                      offset += issues.length;
-                    }
-                  }
-                  const fmt = exportFormat === 'xlsx' ? 'csv' : exportFormat;
-                  let blob: Blob;
-                  let filename: string;
-                  const base = `export-${workspace?.slug ?? workspaceSlug}-${new Date().toISOString().slice(0, 10)}`;
-                  if (fmt === 'json') {
-                    const str = JSON.stringify(allIssues, null, 2);
-                    blob = new Blob([str], { type: 'application/json' });
-                    filename = `${base}.json`;
-                  } else {
-                    const headers = [
-                      'id',
-                      'project_id',
-                      'project_name',
-                      'name',
-                      'priority',
-                      'state_id',
-                      'created_at',
-                      'updated_at',
-                      'description',
-                    ];
-                    const rows = allIssues.map((row) =>
-                      headers
-                        .map((h) => {
-                          const v = row[h];
-                          if (v === null || v === undefined) return '';
-                          let s: string;
-                          if (typeof v === 'object' && v !== null && h === 'description') {
-                            s = (row.description_html as string) ?? JSON.stringify(v);
-                          } else {
-                            s = String(v);
-                          }
-                          return s.includes(',') || s.includes('"') || s.includes('\n')
-                            ? `"${s.replace(/"/g, '""')}"`
-                            : s;
-                        })
-                        .join(','),
-                    );
-                    const csv = [headers.join(','), ...rows].join('\r\n');
-                    blob = new Blob([csv], { type: 'text/csv' });
-                    filename = `${base}.csv`;
-                  }
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = filename;
-                  a.click();
-                  setTimeout(() => URL.revokeObjectURL(url), 0);
-                  setExportProjectOpen(false);
-                } catch {
-                  // could set export error state
-                } finally {
-                  setExporting(false);
-                }
-              }}
-            >
-              {exporting ? 'Exporting…' : 'Export'}
-            </Button>
-          </>
-        }
-      >
-        <div>
-          <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Projects</label>
-          <div className="relative">
-            <select
-              value={exportProjectValue}
-              onChange={(e) => setExportProjectValue(e.target.value)}
-              className="w-full appearance-none rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 pr-8 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-            >
-              <option value="all">All projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--txt-icon-tertiary)">
-              <IconChevronDown />
-            </span>
-          </div>
-          {exportFormat === 'xlsx' && (
-            <p className="mt-2 text-sm text-(--txt-tertiary)">
-              Excel export will download as CSV for now.
-            </p>
-          )}
-        </div>
-      </Modal>
+        workspaceSlug={workspaceSlug}
+        workspace={workspace}
+        projects={projects}
+        exportFormat={exportFormat}
+        exportProjectValue={exportProjectValue}
+        setExportProjectValue={setExportProjectValue}
+        exporting={exporting}
+        setExporting={setExporting}
+        setExportProjectOpen={setExportProjectOpen}
+      />
 
       {/* Invite people to collaborate modal */}
-      <Modal
+      <InviteModal
         open={inviteModalOpen}
         onClose={() => {
           setInviteModalOpen(false);
           setInviteTarget(null);
           setInviteRows([{ id: 0, email: '', role: 'member' }]);
         }}
-        title="Invite people to collaborate"
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setInviteModalOpen(false);
-                setInviteTarget(null);
-                setInviteRows([{ id: 0, email: '', role: 'member' }]);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="invite-collaborators-form" disabled={inviting}>
-              {inviting ? 'Sending…' : 'Send invitations'}
-            </Button>
-          </>
-        }
-      >
-        <form
-          id="invite-collaborators-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submitInviteModal();
-          }}
-        >
-          <p className="mb-4 text-sm text-(--txt-secondary)">
-            {inviteTarget === 'project'
-              ? 'Invite people to this project.'
-              : 'Invite people to collaborate on your workspace.'}
-          </p>
-          <div className="space-y-3">
-            {inviteRows.map((row) => (
-              <div key={row.id} className="flex flex-wrap items-center gap-2">
-                <input
-                  type="email"
-                  value={row.email}
-                  onChange={(e) =>
-                    setInviteRows((prev) =>
-                      prev.map((r) => (r.id === row.id ? { ...r, email: e.target.value } : r)),
-                    )
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Enter' || e.shiftKey) return;
-                    e.preventDefault();
-                    void submitInviteModal();
-                  }}
-                  placeholder="name@company.com"
-                  className="min-w-[200px] flex-1 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) placeholder:text-(--txt-placeholder) focus:outline-none focus:border-(--border-strong)"
-                />
-                <div className="relative min-w-[100px]">
-                  <select
-                    value={row.role}
-                    onChange={(e) =>
-                      setInviteRows((prev) =>
-                        prev.map((r) =>
-                          r.id === row.id
-                            ? { ...r, role: e.target.value as 'member' | 'admin' }
-                            : r,
-                        ),
-                      )
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter' || e.shiftKey) return;
-                      if (!e.ctrlKey && !e.metaKey) return;
-                      e.preventDefault();
-                      void submitInviteModal();
-                    }}
-                    className="w-full appearance-none rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-2 pl-2.5 pr-7 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--txt-icon-tertiary)">
-                    <IconChevronDown />
-                  </span>
-                </div>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() =>
-                setInviteRows((prev) => [
-                  ...prev,
-                  { id: Date.now(), email: '', role: 'member' as const },
-                ])
-              }
-              className="flex items-center gap-1.5 text-sm font-medium text-(--txt-accent-primary) hover:underline"
-            >
-              <IconPlus />
-              Add more
-            </button>
-          </div>
-        </form>
-      </Modal>
+        inviteTarget={inviteTarget}
+        inviteRows={inviteRows}
+        setInviteRows={setInviteRows}
+        inviting={inviting}
+        submitInviteModal={submitInviteModal}
+      />
 
       {/* Project state (workflow) add/edit modal */}
-      <Modal
+      <ProjectStateModal
         open={projectStateModalOpen}
         onClose={() => {
           setProjectStateModalOpen(false);
           setProjectStateEdit(null);
         }}
-        title={projectStateEdit ? 'Edit state' : 'Add state'}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setProjectStateModalOpen(false);
-                setProjectStateEdit(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!projectStateName.trim()}
-              onClick={async () => {
-                if (!workspaceSlug || !selectedProjectId || !projectStateName.trim()) return;
-                try {
-                  if (projectStateEdit) {
-                    await stateService.update(
-                      workspaceSlug,
-                      selectedProjectId,
-                      projectStateEdit.id,
-                      {
-                        name: projectStateName.trim(),
-                        color: projectStateColor,
-                      },
-                    );
-                  } else {
-                    await stateService.create(workspaceSlug, selectedProjectId, {
-                      name: projectStateName.trim(),
-                      color: projectStateColor,
-                      group: projectStateGroup,
-                    });
-                  }
-                  const list = await stateService.list(workspaceSlug, selectedProjectId);
-                  setProjectStates(list ?? []);
-                  setProjectStateModalOpen(false);
-                  setProjectStateEdit(null);
-                } catch {
-                  // Intentionally empty (kept for future use)
-                }
-              }}
-            >
-              {projectStateEdit ? 'Save' : 'Create'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Name</label>
-            <input
-              type="text"
-              value={projectStateName}
-              onChange={(e) => setProjectStateName(e.target.value)}
-              className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-              placeholder="e.g. In Progress"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Color</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={projectStateColor}
-                onChange={(e) => setProjectStateColor(e.target.value)}
-                className="h-9 w-14 cursor-pointer rounded border border-(--border-subtle)"
-              />
-              <input
-                type="text"
-                value={projectStateColor}
-                onChange={(e) => setProjectStateColor(e.target.value)}
-                className="flex-1 rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-              />
-            </div>
-          </div>
-          {!projectStateEdit && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Group</label>
-              <select
-                value={projectStateGroup}
-                onChange={(e) => setProjectStateGroup(e.target.value)}
-                className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-              >
-                <option value="backlog">Backlog</option>
-                <option value="unstarted">Unstarted</option>
-                <option value="started">Started</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          )}
-        </div>
-      </Modal>
+        workspaceSlug={workspaceSlug}
+        selectedProjectId={selectedProjectId}
+        projectStateEdit={projectStateEdit}
+        setProjectStateEdit={setProjectStateEdit}
+        projectStateName={projectStateName}
+        setProjectStateName={setProjectStateName}
+        projectStateColor={projectStateColor}
+        setProjectStateColor={setProjectStateColor}
+        projectStateGroup={projectStateGroup}
+        setProjectStateGroup={setProjectStateGroup}
+        setProjectStates={setProjectStates}
+        setProjectStateModalOpen={setProjectStateModalOpen}
+      />
 
       {/* Project label add/edit modal */}
-      <Modal
+      <ProjectLabelModal
         open={projectLabelModalOpen}
         onClose={() => {
           setProjectLabelModalOpen(false);
           setProjectLabelEdit(null);
         }}
-        title={projectLabelEdit ? 'Edit label' : 'Add label'}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setProjectLabelModalOpen(false);
-                setProjectLabelEdit(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!projectLabelName.trim()}
-              onClick={async () => {
-                if (!workspaceSlug || !selectedProjectId || !projectLabelName.trim()) return;
-                try {
-                  if (projectLabelEdit) {
-                    await labelService.update(
-                      workspaceSlug,
-                      selectedProjectId,
-                      projectLabelEdit.id,
-                      {
-                        name: projectLabelName.trim(),
-                        color: projectLabelColor,
-                      },
-                    );
-                  } else {
-                    await labelService.create(workspaceSlug, selectedProjectId, {
-                      name: projectLabelName.trim(),
-                      color: projectLabelColor,
-                    });
-                  }
-                  const list = await labelService.list(workspaceSlug, selectedProjectId);
-                  setProjectLabels(list ?? []);
-                  setProjectLabelModalOpen(false);
-                  setProjectLabelEdit(null);
-                } catch {
-                  // Intentionally empty (kept for future use)
-                }
-              }}
-            >
-              {projectLabelEdit ? 'Save' : 'Create'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Name</label>
-            <input
-              type="text"
-              value={projectLabelName}
-              onChange={(e) => setProjectLabelName(e.target.value)}
-              className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-              placeholder="e.g. Bug"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">Color</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={projectLabelColor}
-                onChange={(e) => setProjectLabelColor(e.target.value)}
-                className="h-9 w-14 cursor-pointer rounded border border-(--border-subtle)"
-              />
-              <input
-                type="text"
-                value={projectLabelColor}
-                onChange={(e) => setProjectLabelColor(e.target.value)}
-                className="flex-1 rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
-              />
-            </div>
-          </div>
-        </div>
-      </Modal>
+        workspaceSlug={workspaceSlug}
+        selectedProjectId={selectedProjectId}
+        projectLabelEdit={projectLabelEdit}
+        setProjectLabelEdit={setProjectLabelEdit}
+        projectLabelName={projectLabelName}
+        setProjectLabelName={setProjectLabelName}
+        projectLabelColor={projectLabelColor}
+        setProjectLabelColor={setProjectLabelColor}
+        setProjectLabels={setProjectLabels}
+        setProjectLabelModalOpen={setProjectLabelModalOpen}
+      />
     </div>
   );
 }
