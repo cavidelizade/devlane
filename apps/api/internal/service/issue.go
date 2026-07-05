@@ -645,41 +645,56 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 	prevParent := uuidString(issue.ParentID)
 	prevDescription := issue.DescriptionHTML
 
+	// Write only the columns this PATCH actually changed. A full-row Save would
+	// re-write every column from the in-memory snapshot, so a concurrent PATCH to
+	// a different field would be silently reverted (lost update).
+	changed := map[string]any{"updated_by_id": &userID}
 	if name != nil {
 		issue.Name = *name
+		changed["name"] = *name
 	}
 	if priority != nil {
 		issue.Priority = *priority
+		changed["priority"] = *priority
 	}
 	if description != nil {
 		issue.DescriptionHTML = *description
+		changed["description_html"] = *description
 	}
 	if stateID != nil {
 		issue.StateID = stateID
+		changed["state_id"] = stateID
 	}
 	if startDateSet {
 		issue.StartDate = startDate // nil clears the date
+		changed["start_date"] = startDate
 	}
 	if targetDateSet {
 		issue.TargetDate = targetDate
+		changed["target_date"] = targetDate
 	}
 	if parentID != nil {
 		issue.ParentID = parentID
+		changed["parent_id"] = parentID
 	}
 	if isDraft != nil {
 		issue.IsDraft = *isDraft
+		changed["is_draft"] = *isDraft
 	}
 	if issueType != nil && *issueType != "" {
 		issue.Type = *issueType
+		changed["type"] = *issueType
 	}
 	if estimatePointIDSet {
 		issue.EstimatePointID = estimatePointID
+		changed["estimate_point_id"] = estimatePointID
 	}
 	if sortOrder != nil {
 		issue.SortOrder = *sortOrder
+		changed["sort_order"] = *sortOrder
 	}
 	issue.UpdatedByID = &userID
-	if err := s.is.Update(ctx, issue); err != nil {
+	if err := s.is.UpdateFields(ctx, issue.ID, changed); err != nil {
 		return nil, err
 	}
 
