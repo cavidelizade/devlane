@@ -1,11 +1,24 @@
 import { ReactRenderer } from '@tiptap/react';
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
-import type { ComponentType } from 'react';
+import { useLayoutEffect, useRef, type ComponentType } from 'react';
 
 export interface SuggestionMenuProps<T> {
   items: T[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+}
+
+/**
+ * Ref for a menu list container that scrolls its active child into view as the
+ * keyboard selection moves, so arrowing past the visible area follows along.
+ */
+export function useActiveItemScroll(selectedIndex: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const active = ref.current?.children[selectedIndex] as HTMLElement | undefined;
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+  return ref;
 }
 
 /**
@@ -22,6 +35,7 @@ export function createSuggestionRenderer<T>(
     let items: T[] = [];
     let selectedIndex = 0;
     let choose: (item: T) => void = () => {};
+    let getRect: (() => DOMRect | null) | null | undefined;
 
     const paint = () => {
       renderer?.updateProps({ items, selectedIndex, onSelect: (i: number) => choose(items[i]) });
@@ -31,12 +45,16 @@ export function createSuggestionRenderer<T>(
       popup.style.top = `${rect.bottom + window.scrollY + 4}px`;
       popup.style.left = `${rect.left + window.scrollX}px`;
     };
+    // Keep the popup pinned to the caret if the page scrolls or resizes while it
+    // is open. Capture-phase catches scrolling inside the editor's scroll area.
+    const reposition = () => place(getRect?.());
 
     return {
       onStart: (props: SuggestionProps<T>) => {
         items = props.items;
         selectedIndex = 0;
         choose = (item) => props.command(item);
+        getRect = props.clientRect;
         renderer = new ReactRenderer(Menu, {
           props: { items, selectedIndex, onSelect: (i: number) => choose(items[i]) },
           editor: props.editor,
@@ -46,14 +64,17 @@ export function createSuggestionRenderer<T>(
         popup.style.zIndex = '10200';
         popup.appendChild(renderer.element);
         document.body.appendChild(popup);
-        place(props.clientRect?.());
+        place(getRect?.());
+        window.addEventListener('scroll', reposition, true);
+        window.addEventListener('resize', reposition);
       },
       onUpdate: (props: SuggestionProps<T>) => {
         items = props.items;
         selectedIndex = 0;
         choose = (item) => props.command(item);
+        getRect = props.clientRect;
         paint();
-        place(props.clientRect?.());
+        place(getRect?.());
       },
       onKeyDown: (props: { event: KeyboardEvent }) => {
         if (props.event.key === 'Escape') return false;
@@ -75,10 +96,13 @@ export function createSuggestionRenderer<T>(
         return false;
       },
       onExit: () => {
+        window.removeEventListener('scroll', reposition, true);
+        window.removeEventListener('resize', reposition);
         popup?.remove();
         renderer?.destroy();
         popup = null;
         renderer = null;
+        getRect = null;
       },
     };
   };

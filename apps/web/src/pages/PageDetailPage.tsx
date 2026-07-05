@@ -183,13 +183,15 @@ export function PageDetailPage() {
     editorRef.current = editor;
   }, [editor]);
 
-  // Load workspace members for the @-mention menu.
+  // Load workspace members for the @-mention menu. Clearing first avoids briefly
+  // offering the previous workspace's members while the new list is in flight.
   useEffect(() => {
     if (!workspaceSlug) return;
     let cancelled = false;
-    void workspaceService
-      .listMembers(workspaceSlug)
-      .then((members) => {
+    void (async () => {
+      setMentionMembers([]);
+      try {
+        const members = await workspaceService.listMembers(workspaceSlug);
         if (cancelled) return;
         setMentionMembers(
           members.map((m) => ({
@@ -198,8 +200,10 @@ export function PageDetailPage() {
             avatarUrl: m.member_avatar ?? null,
           })),
         );
-      })
-      .catch(() => {});
+      } catch {
+        /* leave the menu empty on failure */
+      }
+    })();
     return () => {
       cancelled = true;
     };

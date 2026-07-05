@@ -12,6 +12,8 @@ export const createMention = (getItems: () => MentionItem[]) =>
     HTMLAttributes: { class: 'page-mention' },
     suggestion: {
       char: '@',
+      // Keep filtering across spaces so multi-word names like "John Doe" match.
+      allowSpaces: true,
       items: ({ query }) => {
         const q = query.trim().toLowerCase();
         const list = getItems();

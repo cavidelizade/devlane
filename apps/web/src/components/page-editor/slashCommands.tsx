@@ -17,7 +17,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { createSuggestionRenderer, type SuggestionMenuProps } from './suggestionPopup';
+import { safeUrl } from '../../lib/sanitize';
+import {
+  createSuggestionRenderer,
+  useActiveItemScroll,
+  type SuggestionMenuProps,
+} from './suggestionPopup';
 
 interface SlashItem {
   title: string;
@@ -113,9 +118,12 @@ const ITEMS: SlashItem[] = [
     icon: ImageIcon,
     keywords: ['picture', 'photo', 'embed'],
     run: (editor, range) => {
-      const url = window.prompt('Image URL');
+      const input = window.prompt('Image URL')?.trim();
       const chain = editor.chain().focus().deleteRange(range);
-      if (url) chain.setImage({ src: url }).run();
+      // Only allow http(s) or site-relative URLs so an image can't smuggle a
+      // javascript: / data: payload into an <img src>.
+      const src = input ? safeUrl(input) : '#';
+      if (input && src !== '#' && !src.startsWith('mailto:')) chain.setImage({ src }).run();
       else chain.run();
     },
   },
@@ -137,6 +145,7 @@ function filterItems(query: string): SlashItem[] {
 }
 
 function SlashMenu({ items, selectedIndex, onSelect }: SuggestionMenuProps<SlashItem>) {
+  const listRef = useActiveItemScroll(selectedIndex);
   if (items.length === 0) {
     return (
       <div className="w-64 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-tertiary) shadow-(--shadow-overlay)">
@@ -145,7 +154,10 @@ function SlashMenu({ items, selectedIndex, onSelect }: SuggestionMenuProps<Slash
     );
   }
   return (
-    <div className="max-h-72 w-64 overflow-y-auto rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-overlay)">
+    <div
+      ref={listRef}
+      className="max-h-72 w-64 overflow-y-auto rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-overlay)"
+    >
       {items.map((item, i) => (
         <button
           key={item.title}

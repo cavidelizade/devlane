@@ -1,9 +1,10 @@
 import { Avatar } from '../ui';
 import { getImageUrl } from '../../lib/utils';
-import type { SuggestionMenuProps } from './suggestionPopup';
+import { useActiveItemScroll, type SuggestionMenuProps } from './suggestionPopup';
 import type { MentionItem } from './mentionTypes';
 
 export function MentionMenu({ items, selectedIndex, onSelect }: SuggestionMenuProps<MentionItem>) {
+  const listRef = useActiveItemScroll(selectedIndex);
   if (items.length === 0) {
     return (
       <div className="w-60 rounded-md border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-tertiary) shadow-(--shadow-overlay)">
@@ -12,7 +13,10 @@ export function MentionMenu({ items, selectedIndex, onSelect }: SuggestionMenuPr
     );
   }
   return (
-    <div className="max-h-72 w-60 overflow-y-auto rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-overlay)">
+    <div
+      ref={listRef}
+      className="max-h-72 w-60 overflow-y-auto rounded-md border border-(--border-subtle) bg-(--bg-surface-1) py-1 shadow-(--shadow-overlay)"
+    >
       {items.map((item, i) => (
         <button
           key={item.id}

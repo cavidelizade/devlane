@@ -48,9 +48,10 @@ export function usePageEditor(opts: UsePageEditorOptions): Editor | null {
   const { initialHtml, placeholder, readOnly, onUpdate, onSaveShortcut, mentionItems } = opts;
 
   // The mention suggestion reads members through this ref so members that load
-  // after the editor mounts still appear in the menu. The getter is only invoked
-  // by the ProseMirror suggestion plugin on user input, never during render.
-  const mentionItemsRef = useRef<MentionItem[]>([]);
+  // after the editor mounts still appear in the menu. Seeded from the initial
+  // prop so already-cached members work on the very first "@". The getter is
+  // only invoked by the ProseMirror suggestion plugin on input, never in render.
+  const mentionItemsRef = useRef<MentionItem[]>(mentionItems ?? []);
   const getMentionItems = () => mentionItemsRef.current;
 
   const editor = useEditor({
