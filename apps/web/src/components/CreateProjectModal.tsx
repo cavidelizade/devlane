@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Input, Tooltip } from './ui';
 import { CoverImageModal } from './CoverImageModal';
@@ -86,7 +86,7 @@ export function CreateProjectModal({
   const [coverModalOpen, setCoverModalOpen] = useState(false);
   const [iconModalOpen, setIconModalOpen] = useState(false);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setName('');
     setIdentifier('');
     setDescription('');
@@ -97,7 +97,7 @@ export function CreateProjectModal({
     setProjectLeadId(null);
     setError('');
     onClose();
-  };
+  }, [onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +132,6 @@ export function CreateProjectModal({
   useEffect(() => {
     if (!open) return;
 
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleEscape);
     document.body.style.overflow = 'hidden';
 
     // Load workspace members for project lead dropdown
@@ -147,10 +143,22 @@ export function CreateProjectModal({
       });
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = '';
     };
-  }, [open, onClose, workspaceSlug]);
+  }, [open, workspaceSlug]);
+
+  // Escape closes the whole form — but not while a nested cover/icon picker is
+  // open, since that picker handles Escape itself. Using handleClose (not the
+  // raw onClose) ensures the form state is reset so a reopen starts clean.
+  useEffect(() => {
+    if (!open) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || coverModalOpen || iconModalOpen) return;
+      handleClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [open, coverModalOpen, iconModalOpen, handleClose]);
 
   if (!open) return null;
 
