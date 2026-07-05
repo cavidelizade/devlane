@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -144,14 +145,24 @@ func (h *CycleHandler) Update(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Status      string `json:"status"`
-		StartDate   string `json:"start_date"`
-		EndDate     string `json:"end_date"`
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Status      string          `json:"status"`
+		StartDate   json.RawMessage `json:"start_date"`
+		EndDate     json.RawMessage `json:"end_date"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	cy, err := h.Cycle.Update(c.Request.Context(), slug, projectID, cycleID, user.ID, body.Name, body.Description, body.Status, parseOptionalTime(body.StartDate), parseOptionalTime(body.EndDate))
+	startDateSet, startDate, ok := parseUpdatableDate(body.StartDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date"})
+		return
+	}
+	endDateSet, endDate, ok := parseUpdatableDate(body.EndDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid end_date"})
+		return
+	}
+	cy, err := h.Cycle.Update(c.Request.Context(), slug, projectID, cycleID, user.ID, body.Name, body.Description, body.Status, startDateSet, startDate, endDateSet, endDate)
 	if err != nil {
 		if err == service.ErrCycleNotFound || err == service.ErrProjectForbidden || err == service.ErrProjectNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})

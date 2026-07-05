@@ -135,7 +135,7 @@ func (s *CycleService) Get(ctx context.Context, workspaceSlug string, projectID,
 	return cy, nil
 }
 
-func (s *CycleService) Update(ctx context.Context, workspaceSlug string, projectID, cycleID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, endDate *time.Time) (*model.Cycle, error) {
+func (s *CycleService) Update(ctx context.Context, workspaceSlug string, projectID, cycleID uuid.UUID, userID uuid.UUID, name, description, status string, startDateSet bool, startDate *time.Time, endDateSet bool, endDate *time.Time) (*model.Cycle, error) {
 	cy, err := s.Get(ctx, workspaceSlug, projectID, cycleID, userID)
 	if err != nil {
 		return nil, err
@@ -146,10 +146,10 @@ func (s *CycleService) Update(ctx context.Context, workspaceSlug string, project
 	if description != "" {
 		cy.Description = description
 	}
-	if startDate != nil {
-		cy.StartDate = startDate
+	if startDateSet {
+		cy.StartDate = startDate // nil clears the date
 	}
-	if endDate != nil {
+	if endDateSet {
 		cy.EndDate = endDate
 	}
 	if err := s.cs.Update(ctx, cy); err != nil {

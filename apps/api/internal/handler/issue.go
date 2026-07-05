@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -226,12 +227,12 @@ func (h *IssueHandler) Update(c *gin.Context) {
 		// description_html is an alias accepted for symmetry with the column
 		// name on the GORM model — frontend can send either.
 		DescriptionHTML *string     `json:"description_html"`
-		Priority        string      `json:"priority"`
-		StateID         *uuid.UUID  `json:"state_id"`
-		ParentID        *uuid.UUID  `json:"parent_id"`
-		StartDate       *string     `json:"start_date"`
-		TargetDate      *string     `json:"target_date"`
-		AssigneeIDs     []uuid.UUID `json:"assignee_ids"`
+		Priority        string          `json:"priority"`
+		StateID         *uuid.UUID      `json:"state_id"`
+		ParentID        *uuid.UUID      `json:"parent_id"`
+		StartDate       json.RawMessage `json:"start_date"`
+		TargetDate      json.RawMessage `json:"target_date"`
+		AssigneeIDs     []uuid.UUID     `json:"assignee_ids"`
 		LabelIDs        []uuid.UUID `json:"label_ids"`
 		IsDraft         *bool       `json:"is_draft"`
 		Type            string      `json:"type"`
@@ -270,22 +271,15 @@ func (h *IssueHandler) Update(c *gin.Context) {
 		labelIDs = &tmp
 	}
 
-	var startDate, targetDate *time.Time
-	if body.StartDate != nil && *body.StartDate != "" {
-		if t, err := time.Parse("2006-01-02", *body.StartDate); err == nil {
-			startDate = &t
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date"})
-			return
-		}
+	startDateSet, startDate, ok := parseUpdatableDate(body.StartDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date"})
+		return
 	}
-	if body.TargetDate != nil && *body.TargetDate != "" {
-		if t, err := time.Parse("2006-01-02", *body.TargetDate); err == nil {
-			targetDate = &t
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target_date"})
-			return
-		}
+	targetDateSet, targetDate, ok := parseUpdatableDate(body.TargetDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target_date"})
+		return
 	}
 
 	var issueType *string
@@ -305,7 +299,7 @@ func (h *IssueHandler) Update(c *gin.Context) {
 			estimatePointID = &pid
 		}
 	}
-	issue, err := h.Issue.Update(c.Request.Context(), slug, projectID, issueID, user.ID, name, priority, description, body.StateID, assigneeIDs, labelIDs, startDate, targetDate, body.ParentID, body.IsDraft, issueType, estimatePointIDSet, estimatePointID, body.SortOrder)
+	issue, err := h.Issue.Update(c.Request.Context(), slug, projectID, issueID, user.ID, name, priority, description, body.StateID, assigneeIDs, labelIDs, startDateSet, startDate, targetDateSet, targetDate, body.ParentID, body.IsDraft, issueType, estimatePointIDSet, estimatePointID, body.SortOrder)
 	if err != nil {
 		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Issue not found"})

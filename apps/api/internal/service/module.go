@@ -150,7 +150,7 @@ func (s *ModuleService) Get(ctx context.Context, workspaceSlug string, projectID
 	return mod, nil
 }
 
-func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projectID, moduleID uuid.UUID, userID uuid.UUID, name, description, status string, startDate, targetDate *time.Time, leadIDSet bool, leadID *uuid.UUID, memberIDsSet bool, memberIDs []uuid.UUID) (*model.Module, error) {
+func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projectID, moduleID uuid.UUID, userID uuid.UUID, name, description, status string, startDateSet bool, startDate *time.Time, targetDateSet bool, targetDate *time.Time, leadIDSet bool, leadID *uuid.UUID, memberIDsSet bool, memberIDs []uuid.UUID) (*model.Module, error) {
 	mod, err := s.Get(ctx, workspaceSlug, projectID, moduleID, userID)
 	if err != nil {
 		return nil, err
@@ -164,10 +164,10 @@ func (s *ModuleService) Update(ctx context.Context, workspaceSlug string, projec
 	if status != "" {
 		mod.Status = status
 	}
-	if startDate != nil {
-		mod.StartDate = startDate
+	if startDateSet {
+		mod.StartDate = startDate // nil clears the date
 	}
-	if targetDate != nil {
+	if targetDateSet {
 		mod.TargetDate = targetDate
 	}
 	if leadIDSet {
