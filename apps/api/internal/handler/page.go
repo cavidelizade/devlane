@@ -58,6 +58,8 @@ func translatePageError(c *gin.Context, err error, fallback string) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 	case errors.Is(err, service.ErrPageSameProject):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Page is already in that project"})
+	case errors.Is(err, service.ErrPageMoveConflict):
+		c.JSON(http.StatusConflict, gin.H{"error": "The page changed while moving. Try again."})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fallback})
 	}

@@ -104,9 +104,10 @@ func TestPage_MoveRejectedWhenSubtreeNotOwned(t *testing.T) {
 	rr := ts.POST(base+"/move/", map[string]any{"target_project_id": target.ID.String()}, w.Session)
 	require.Equal(t, http.StatusForbidden, rr.Code, "body=%s", rr.Body.String())
 
-	// Nothing moved: the tree stays in the source project.
+	// Nothing moved: the whole tree stays in the source project.
 	require.Equal(t, int64(1), countPageLinks(t, ts, w.Project.ID, root.ID))
-	require.Zero(t, countPageLinks(t, ts, target.ID, root.ID))
+	require.Equal(t, int64(1), countPageLinks(t, ts, w.Project.ID, child.ID))
+	require.Zero(t, countPageLinks(t, ts, target.ID, root.ID, child.ID))
 }
 
 func TestPage_MoveCrossWorkspaceRejected(t *testing.T) {

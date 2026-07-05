@@ -11,14 +11,15 @@ import (
 )
 
 var (
-	ErrPageNotFound    = errors.New("page not found")
-	ErrPageLocked      = errors.New("page is locked")
-	ErrPageArchived    = errors.New("page is archived")
-	ErrPageReadOnly    = errors.New("no permission to edit this page")
-	ErrPageNotArchived = errors.New("page must be archived before deletion")
-	ErrPageBadParent   = errors.New("invalid parent page")
-	ErrPageBadRequest  = errors.New("invalid page request")
-	ErrPageSameProject = errors.New("page already in target project")
+	ErrPageNotFound     = errors.New("page not found")
+	ErrPageLocked       = errors.New("page is locked")
+	ErrPageArchived     = errors.New("page is archived")
+	ErrPageReadOnly     = errors.New("no permission to edit this page")
+	ErrPageNotArchived  = errors.New("page must be archived before deletion")
+	ErrPageBadParent    = errors.New("invalid parent page")
+	ErrPageBadRequest   = errors.New("invalid page request")
+	ErrPageSameProject  = errors.New("page already in target project")
+	ErrPageMoveConflict = errors.New("page tree changed during move")
 )
 
 // PageService handles page business logic and permission gating.
@@ -354,6 +355,9 @@ func (s *PageService) Move(ctx context.Context, workspaceSlug string, pageID, us
 		ids = append(ids, subtree[i].ID)
 	}
 	if err := s.pageStore.MoveTreeToProject(ctx, pageID, ids, targetProjectID, page.WorkspaceID, userID); err != nil {
+		if errors.Is(err, store.ErrSubtreeChanged) {
+			return nil, ErrPageMoveConflict
+		}
 		return nil, err
 	}
 	return s.pageStore.GetByID(ctx, pageID)
