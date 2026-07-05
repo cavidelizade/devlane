@@ -90,6 +90,17 @@ export const epicService = {
     );
   },
 
+  async removeIssue(
+    workspaceSlug: string,
+    projectId: string,
+    epicId: string,
+    issueId: string,
+  ): Promise<void> {
+    await apiClient.delete(
+      `${base(workspaceSlug, projectId)}/${encodeURIComponent(epicId)}/issues/${encodeURIComponent(issueId)}/`,
+    );
+  },
+
   async listLinks(
     workspaceSlug: string,
     projectId: string,

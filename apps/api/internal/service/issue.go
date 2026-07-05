@@ -1263,3 +1263,22 @@ func (s *IssueService) AddIssueToEpic(ctx context.Context, workspaceSlug string,
 	issue.ParentID = &epicID
 	return s.is.Update(ctx, issue)
 }
+
+// RemoveIssueFromEpic detaches a child issue from an epic by clearing its
+// parent. It verifies the epic is reachable and that the issue is actually a
+// child of this epic before clearing, so removing an issue that belongs to a
+// different epic (or none) returns a not-found rather than silently succeeding.
+func (s *IssueService) RemoveIssueFromEpic(ctx context.Context, workspaceSlug string, projectID, epicID, issueID uuid.UUID, userID uuid.UUID) error {
+	if _, err := s.GetEpic(ctx, workspaceSlug, projectID, epicID, userID); err != nil {
+		return err
+	}
+	issue, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID)
+	if err != nil {
+		return err
+	}
+	if issue.ParentID == nil || *issue.ParentID != epicID {
+		return ErrIssueNotFound
+	}
+	issue.ParentID = nil
+	return s.is.Update(ctx, issue)
+}
