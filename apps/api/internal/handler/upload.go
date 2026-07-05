@@ -100,13 +100,25 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 
 // ServeFile streams a file from MinIO by path.
 // GET /api/files/*path
+// isServableObjectPath allows only the object prefixes we intend to serve —
+// generic uploads (avatars/covers/logos) and issue attachments — and rejects
+// empty paths and path traversal. Attachments live under
+// "attachments/<issueId>/<assetId>", so serving only "uploads/" made every
+// attachment download fail with 400.
+func isServableObjectPath(path string) bool {
+	if path == "" || strings.Contains(path, "..") {
+		return false
+	}
+	return strings.HasPrefix(path, "uploads/") || strings.HasPrefix(path, "attachments/")
+}
+
 func (h *UploadHandler) ServeFile(c *gin.Context) {
 	if h.Minio == nil {
 		c.Status(http.StatusServiceUnavailable)
 		return
 	}
 	path := strings.TrimPrefix(c.Param("path"), "/")
-	if path == "" || strings.Contains(path, "..") || !strings.HasPrefix(path, "uploads/") {
+	if !isServableObjectPath(path) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
