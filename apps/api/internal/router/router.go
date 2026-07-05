@@ -394,6 +394,7 @@ func New(cfg Config) *gin.Engine {
 		api.DELETE("/workspaces/:slug/projects/:projectId/epics/:epicId/", epicHandler.DeleteEpic)
 		api.GET("/workspaces/:slug/projects/:projectId/epics/:epicId/issues/", epicHandler.ListEpicIssues)
 		api.POST("/workspaces/:slug/projects/:projectId/epics/:epicId/issues/", epicHandler.AddIssueToEpic)
+		api.DELETE("/workspaces/:slug/projects/:projectId/epics/:epicId/issues/:issueId/", epicHandler.RemoveIssueFromEpic)
 		api.GET("/workspaces/:slug/projects/:projectId/epics/:epicId/links/", issueLinkHandler.ListLinks)
 		api.POST("/workspaces/:slug/projects/:projectId/epics/:epicId/links/", issueLinkHandler.CreateLink)
 		api.PATCH("/workspaces/:slug/projects/:projectId/epics/:epicId/links/:linkId/", issueLinkHandler.UpdateLink)

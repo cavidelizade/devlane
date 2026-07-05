@@ -226,18 +226,19 @@ export function EpicDetailPage() {
                   <th className="px-4 py-2 font-medium text-(--txt-secondary)">Work item</th>
                   <th className="px-4 py-2 font-medium text-(--txt-secondary)">State</th>
                   <th className="px-4 py-2 font-medium text-(--txt-secondary)">Priority</th>
+                  <th className="w-10 px-4 py-2" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {issues.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-6 text-center text-xs text-(--txt-tertiary)">
+                    <td colSpan={4} className="px-4 py-6 text-center text-xs text-(--txt-tertiary)">
                       No work items yet.
                     </td>
                   </tr>
                 ) : (
                   issues.map((i) => (
-                    <tr key={i.id} className="border-t border-(--border-subtle)">
+                    <tr key={i.id} className="group border-t border-(--border-subtle)">
                       <td className="px-4 py-2">
                         <Link
                           to={`${projectBase}/issues/${i.id}`}
@@ -253,6 +254,30 @@ export function EpicDetailPage() {
                             {i.priority}
                           </Badge>
                         )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <button
+                          type="button"
+                          title="Remove from epic"
+                          aria-label={`Remove ${i.name} from epic`}
+                          onClick={async () => {
+                            if (!workspaceSlug) return;
+                            try {
+                              await epicService.removeIssue(
+                                workspaceSlug,
+                                project.id,
+                                epic.id,
+                                i.id,
+                              );
+                              setIssues((prev) => prev.filter((x) => x.id !== i.id));
+                            } catch {
+                              setError('Failed to remove issue from epic.');
+                            }
+                          }}
+                          className="text-sm text-(--txt-tertiary) opacity-0 group-hover:opacity-100 hover:text-(--txt-danger-primary)"
+                        >
+                          ×
+                        </button>
                       </td>
                     </tr>
                   ))

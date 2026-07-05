@@ -323,3 +323,37 @@ func (h *EpicHandler) AddIssueToEpic(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// RemoveIssueFromEpic unlinks a child issue from an epic by clearing its parent.
+// DELETE /api/workspaces/:slug/projects/:projectId/epics/:epicId/issues/:issueId/
+func (h *EpicHandler) RemoveIssueFromEpic(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	eID, ok := epicID(c)
+	if !ok {
+		return
+	}
+	issueID, err := uuid.Parse(c.Param("issueId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid issue ID"})
+		return
+	}
+	if err := h.Issue.RemoveIssueFromEpic(c.Request.Context(), slug, projectID, eID, issueID, user.ID); err != nil {
+		if err == service.ErrIssueNotFound || err == service.ErrProjectForbidden {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove issue from epic"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
