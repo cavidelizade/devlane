@@ -77,32 +77,59 @@ func (s *IssueService) SetLabelStore(l *store.LabelStore) { s.labels = l }
 
 // validateRelations rejects related ids that fall outside the allowed scope:
 // state and labels must belong to the same project, a parent must be another
-// issue in the same project, and assignees must be members of the workspace.
+// issue in the same project (and never the issue itself — pass selfID on
+// update; uuid.Nil on create), and assignees must be members of the workspace.
 // Only the provided (non-nil / non-empty) fields are checked. Ownership stores
-// are optional; when one isn't wired the corresponding check is skipped.
-func (s *IssueService) validateRelations(ctx context.Context, projectID, workspaceID uuid.UUID, stateID *uuid.UUID, labelIDs []uuid.UUID, assigneeIDs []uuid.UUID, parentID *uuid.UUID) error {
+// are optional; when one isn't wired the corresponding check is skipped. A
+// genuine "not found" maps to the invalid-* sentinel, but any other datastore
+// error is returned so query failures surface as 5xx, not 400.
+func (s *IssueService) validateRelations(ctx context.Context, projectID, workspaceID, selfID uuid.UUID, stateID *uuid.UUID, labelIDs []uuid.UUID, assigneeIDs []uuid.UUID, parentID *uuid.UUID) error {
 	if stateID != nil && s.states != nil {
 		st, err := s.states.GetByID(ctx, *stateID)
-		if err != nil || st == nil || st.ProjectID != projectID {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInvalidState
+		}
+		if err != nil {
+			return err
+		}
+		if st == nil || st.ProjectID != projectID {
 			return ErrInvalidState
 		}
 	}
 	if len(labelIDs) > 0 && s.labels != nil {
 		for _, id := range labelIDs {
 			l, err := s.labels.GetByID(ctx, id)
-			if err != nil || l == nil || l.ProjectID == nil || *l.ProjectID != projectID {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrInvalidLabel
+			}
+			if err != nil {
+				return err
+			}
+			if l == nil || l.ProjectID == nil || *l.ProjectID != projectID {
 				return ErrInvalidLabel
 			}
 		}
 	}
 	if parentID != nil {
+		if *parentID == selfID {
+			return ErrInvalidParent // an issue can't be its own parent
+		}
 		parent, err := s.is.GetByID(ctx, *parentID)
-		if err != nil || parent == nil || parent.ProjectID != projectID {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInvalidParent
+		}
+		if err != nil {
+			return err
+		}
+		if parent == nil || parent.ProjectID != projectID {
 			return ErrInvalidParent
 		}
 	}
 	for _, id := range assigneeIDs {
-		ok, _ := s.ws.IsMember(ctx, workspaceID, id)
+		ok, err := s.ws.IsMember(ctx, workspaceID, id)
+		if err != nil {
+			return err
+		}
 		if !ok {
 			return ErrInvalidAssignee
 		}
@@ -518,7 +545,7 @@ func (s *IssueService) Create(ctx context.Context, workspaceSlug string, project
 		return nil, err
 	}
 	wrk, _ := s.ws.GetBySlug(ctx, workspaceSlug)
-	if err := s.validateRelations(ctx, projectID, wrk.ID, stateID, labelIDs, assigneeIDs, parentID); err != nil {
+	if err := s.validateRelations(ctx, projectID, wrk.ID, uuid.Nil, stateID, labelIDs, assigneeIDs, parentID); err != nil {
 		return nil, err
 	}
 	issue := &model.Issue{
@@ -604,7 +631,7 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 	if labelIDs != nil {
 		wantLabels = *labelIDs
 	}
-	if err := s.validateRelations(ctx, issue.ProjectID, issue.WorkspaceID, stateID, wantLabels, wantAssignees, parentID); err != nil {
+	if err := s.validateRelations(ctx, issue.ProjectID, issue.WorkspaceID, issue.ID, stateID, wantLabels, wantAssignees, parentID); err != nil {
 		return nil, err
 	}
 

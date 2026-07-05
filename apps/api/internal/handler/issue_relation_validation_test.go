@@ -67,6 +67,15 @@ func TestIssue_UpdateRejectsForeignRelations(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest,
 		ts.PATCH(base, map[string]any{"assignee_ids": []string{nonMember.ID.String()}}, w.Session).Code)
 
+	// A parent from another project is rejected.
+	foreignParent := testutil.CreateIssue(t, ts.DB, otherProject.ID, w.Workspace.ID, w.User.ID)
+	require.Equal(t, http.StatusBadRequest,
+		ts.PATCH(base, map[string]any{"parent_id": foreignParent.ID.String()}, w.Session).Code)
+
+	// An issue can't be made its own parent.
+	require.Equal(t, http.StatusBadRequest,
+		ts.PATCH(base, map[string]any{"parent_id": issue.ID.String()}, w.Session).Code)
+
 	// A well-scoped update still works.
 	okState := testutil.CreateState(t, ts.DB, w.Project.ID, w.Workspace.ID)
 	require.Equal(t, http.StatusOK,
