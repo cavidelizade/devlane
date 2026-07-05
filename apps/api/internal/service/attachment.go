@@ -90,10 +90,16 @@ func (s *AttachmentService) ensureIssueAccess(ctx context.Context, workspaceSlug
 // attachment's workspace, so a leaked object URL can't be fetched by outsiders.
 func (s *AttachmentService) AuthorizeDownload(ctx context.Context, issueID, assetID, userID uuid.UUID) error {
 	att, err := s.is.GetAttachmentByAssetID(ctx, assetID, issueID)
-	if err != nil || att == nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && att == nil) {
 		return ErrAttachmentNotFound
 	}
-	ok, _ := s.ws.IsMember(ctx, att.WorkspaceID, userID)
+	if err != nil {
+		return err // a real datastore failure — surface it as 5xx, not a 404
+	}
+	ok, err := s.ws.IsMember(ctx, att.WorkspaceID, userID)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return ErrProjectForbidden
 	}

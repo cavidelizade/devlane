@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -162,7 +163,11 @@ func (h *UploadHandler) ServeFile(c *gin.Context) {
 			return
 		}
 		if err := h.Attachments.AuthorizeDownload(c.Request.Context(), issueID, assetID, user.ID); err != nil {
-			c.Status(http.StatusNotFound)
+			if errors.Is(err, service.ErrAttachmentNotFound) || errors.Is(err, service.ErrProjectForbidden) {
+				c.Status(http.StatusNotFound)
+			} else {
+				c.Status(http.StatusInternalServerError)
+			}
 			return
 		}
 	}
