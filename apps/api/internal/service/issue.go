@@ -336,7 +336,7 @@ func (s *IssueService) BulkUpdate(ctx context.Context, workspaceSlug string, pro
 	n := 0
 	var firstErr error
 	for _, id := range issueIDs {
-		if _, err := s.Update(ctx, workspaceSlug, projectID, id, userID, nil, priority, nil, stateID, nil, nil, nil, nil, nil, nil, nil, false, nil, nil); err != nil {
+		if _, err := s.Update(ctx, workspaceSlug, projectID, id, userID, nil, priority, nil, stateID, nil, nil, false, nil, false, nil, nil, nil, nil, false, nil, nil); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -543,7 +543,7 @@ func (s *IssueService) Create(ctx context.Context, workspaceSlug string, project
 	return issue, nil
 }
 
-func (s *IssueService) Update(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, name, priority, description *string, stateID *uuid.UUID, assigneeIDs, labelIDs *[]uuid.UUID, startDate, targetDate *time.Time, parentID *uuid.UUID, isDraft *bool, issueType *string, estimatePointIDSet bool, estimatePointID *uuid.UUID, sortOrder *float64) (*model.Issue, error) {
+func (s *IssueService) Update(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, name, priority, description *string, stateID *uuid.UUID, assigneeIDs, labelIDs *[]uuid.UUID, startDateSet bool, startDate *time.Time, targetDateSet bool, targetDate *time.Time, parentID *uuid.UUID, isDraft *bool, issueType *string, estimatePointIDSet bool, estimatePointID *uuid.UUID, sortOrder *float64) (*model.Issue, error) {
 	issue, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID)
 	if err != nil {
 		return nil, err
@@ -571,10 +571,10 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 	if stateID != nil {
 		issue.StateID = stateID
 	}
-	if startDate != nil {
-		issue.StartDate = startDate
+	if startDateSet {
+		issue.StartDate = startDate // nil clears the date
 	}
-	if targetDate != nil {
+	if targetDateSet {
 		issue.TargetDate = targetDate
 	}
 	if parentID != nil {
@@ -617,13 +617,13 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 			s.notify.IssueStateChanged(ctx, issue, userID, prevStateID, issue.StateID)
 		}
 	}
-	if startDate != nil && prevStart != dateString(issue.StartDate) {
+	if startDateSet && prevStart != dateString(issue.StartDate) {
 		s.recordActivity(ctx, issue, userID, "start_date", prevStart, dateString(issue.StartDate))
 		if s.notify != nil {
 			s.notify.IssueFieldChanged(ctx, issue, userID, "start_date", prevStart, dateString(issue.StartDate))
 		}
 	}
-	if targetDate != nil && prevTarget != dateString(issue.TargetDate) {
+	if targetDateSet && prevTarget != dateString(issue.TargetDate) {
 		s.recordActivity(ctx, issue, userID, "target_date", prevTarget, dateString(issue.TargetDate))
 		if s.notify != nil {
 			s.notify.IssueFieldChanged(ctx, issue, userID, "target_date", prevTarget, dateString(issue.TargetDate))

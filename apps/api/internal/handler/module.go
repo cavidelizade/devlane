@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -184,13 +185,13 @@ func (h *ModuleHandler) Update(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
-		Status      string    `json:"status"`
-		StartDate   string    `json:"start_date"`
-		TargetDate  string    `json:"target_date"`
-		LeadID      *string   `json:"lead_id"`
-		MemberIDs   *[]string `json:"member_ids"`
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Status      string          `json:"status"`
+		StartDate   json.RawMessage `json:"start_date"`
+		TargetDate  json.RawMessage `json:"target_date"`
+		LeadID      *string         `json:"lead_id"`
+		MemberIDs   *[]string       `json:"member_ids"`
 	}
 	// An empty PATCH body is allowed (a no-op patch); other parse errors are not.
 	if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
@@ -208,7 +209,17 @@ func (h *ModuleHandler) Update(c *gin.Context) {
 			return
 		}
 	}
-	mod, err := h.Module.Update(c.Request.Context(), slug, projectID, moduleID, user.ID, body.Name, body.Description, body.Status, parseOptionalDate(body.StartDate), parseOptionalDate(body.TargetDate), body.LeadID != nil, leadIDPtr, body.MemberIDs != nil, memberIDs)
+	startDateSet, startDate, ok := parseUpdatableDate(body.StartDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date"})
+		return
+	}
+	targetDateSet, targetDate, ok := parseUpdatableDate(body.TargetDate)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target_date"})
+		return
+	}
+	mod, err := h.Module.Update(c.Request.Context(), slug, projectID, moduleID, user.ID, body.Name, body.Description, body.Status, startDateSet, startDate, targetDateSet, targetDate, body.LeadID != nil, leadIDPtr, body.MemberIDs != nil, memberIDs)
 	if err != nil {
 		if err == service.ErrModuleNotFound || err == service.ErrProjectForbidden || err == service.ErrProjectNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
