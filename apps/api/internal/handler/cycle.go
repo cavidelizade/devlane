@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -151,7 +153,11 @@ func (h *CycleHandler) Update(c *gin.Context) {
 		StartDate   json.RawMessage `json:"start_date"`
 		EndDate     json.RawMessage `json:"end_date"`
 	}
-	_ = c.ShouldBindJSON(&body)
+	// An empty PATCH body is allowed (a no-op patch); other parse errors are not.
+	if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
+		return
+	}
 	startDateSet, startDate, ok := parseUpdatableDate(body.StartDate)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid start_date"})

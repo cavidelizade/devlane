@@ -617,13 +617,13 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 			s.notify.IssueStateChanged(ctx, issue, userID, prevStateID, issue.StateID)
 		}
 	}
-	if startDate != nil && prevStart != dateString(issue.StartDate) {
+	if startDateSet && prevStart != dateString(issue.StartDate) {
 		s.recordActivity(ctx, issue, userID, "start_date", prevStart, dateString(issue.StartDate))
 		if s.notify != nil {
 			s.notify.IssueFieldChanged(ctx, issue, userID, "start_date", prevStart, dateString(issue.StartDate))
 		}
 	}
-	if targetDate != nil && prevTarget != dateString(issue.TargetDate) {
+	if targetDateSet && prevTarget != dateString(issue.TargetDate) {
 		s.recordActivity(ctx, issue, userID, "target_date", prevTarget, dateString(issue.TargetDate))
 		if s.notify != nil {
 			s.notify.IssueFieldChanged(ctx, issue, userID, "target_date", prevTarget, dateString(issue.TargetDate))
