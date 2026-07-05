@@ -138,7 +138,6 @@ export function Dropdown({
         )}
       </button>
       {open &&
-        position &&
         createPortal(
           <div
             ref={panelRef}
@@ -148,11 +147,15 @@ export function Dropdown({
             }
             style={{
               position: 'fixed',
-              top: position.top,
-              ...(position.left !== undefined && { left: position.left }),
-              ...(position.right !== undefined && { right: position.right }),
-              ...(position.maxHeight !== undefined && { maxHeight: position.maxHeight }),
+              top: position?.top ?? 0,
+              ...(position?.left !== undefined && { left: position.left }),
+              ...(position?.right !== undefined && { right: position.right }),
+              ...(position?.maxHeight !== undefined && { maxHeight: position.maxHeight }),
               zIndex: DROPDOWN_Z_INDEX,
+              // Render the panel while position is still null so the layout effect
+              // can measure its real size, but keep it hidden until it's placed so
+              // it never flashes at the top-left before flipping/clamping.
+              visibility: position ? 'visible' : 'hidden',
             }}
           >
             {children}
