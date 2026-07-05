@@ -36,13 +36,15 @@ export function IntakePage() {
     Promise.all([
       workspaceService.getBySlug(workspaceSlug),
       projectService.get(workspaceSlug, projectId),
-      issueService.list(workspaceSlug, projectId, { limit: 500 }),
+      // Read from the draft list, not the active issue list (which no longer
+      // returns drafts), then narrow the workspace drafts to this project.
+      issueService.listWorkspaceDrafts(workspaceSlug, { limit: 500 }),
     ])
-      .then(([w, p, issues]) => {
+      .then(([w, p, workspaceDrafts]) => {
         if (cancelled) return;
         setWorkspace(w ?? null);
         setProject(p ?? null);
-        setDrafts((issues ?? []).filter((i) => i.is_draft));
+        setDrafts((workspaceDrafts ?? []).filter((i) => i.project_id === projectId));
       })
       .catch(() => {
         if (!cancelled) {
