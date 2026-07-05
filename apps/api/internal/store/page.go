@@ -273,17 +273,19 @@ func (s *PageStore) RemoveProjectPage(ctx context.Context, projectID, pageID uui
 		Delete(&model.ProjectPage{}).Error
 }
 
-// collectPageSubtree returns rootID followed by every descendant id, walking the
-// parent_id tree iteratively so it works on any dialect.
-func collectPageSubtree(ctx context.Context, tx *gorm.DB, rootID uuid.UUID) ([]uuid.UUID, error) {
+// collectPageSubtreeIDs returns rootID followed by every descendant id within
+// workspaceID, walking the parent_id tree iteratively so it works on any
+// dialect. Scoping to the workspace keeps a stale cross-workspace parent link
+// from pulling in another workspace's pages.
+func collectPageSubtreeIDs(ctx context.Context, db *gorm.DB, rootID, workspaceID uuid.UUID) ([]uuid.UUID, error) {
 	ids := []uuid.UUID{rootID}
 	queue := []uuid.UUID{rootID}
 	for len(queue) > 0 {
 		parent := queue[0]
 		queue = queue[1:]
 		var childIDs []uuid.UUID
-		if err := tx.WithContext(ctx).Model(&model.Page{}).
-			Where("parent_id = ? AND deleted_at IS NULL", parent).
+		if err := db.WithContext(ctx).Model(&model.Page{}).
+			Where("parent_id = ? AND workspace_id = ? AND deleted_at IS NULL", parent, workspaceID).
 			Pluck("id", &childIDs).Error; err != nil {
 			return nil, err
 		}
@@ -293,22 +295,36 @@ func collectPageSubtree(ctx context.Context, tx *gorm.DB, rootID uuid.UUID) ([]u
 	return ids, nil
 }
 
-// MoveTreeToProject moves a page and its whole subtree into targetProjectID: it
-// detaches the root from any parent and replaces every affected page's
-// project_pages link with a single link to the target. Links are hard deleted
-// because project_pages has a (project_id, page_id) unique constraint that
-// ignores soft-delete, so a lingering soft-deleted row would block re-linking.
-func (s *PageStore) MoveTreeToProject(ctx context.Context, rootID, targetProjectID, workspaceID, userID uuid.UUID) error {
+// SubtreePages returns the root page plus every descendant within workspaceID,
+// so callers can permission-check the whole tree before moving it.
+func (s *PageStore) SubtreePages(ctx context.Context, rootID, workspaceID uuid.UUID) ([]model.Page, error) {
+	ids, err := collectPageSubtreeIDs(ctx, s.db, rootID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var pages []model.Page
+	if err := s.db.WithContext(ctx).
+		Where("id IN ? AND workspace_id = ? AND deleted_at IS NULL", ids, workspaceID).
+		Find(&pages).Error; err != nil {
+		return nil, err
+	}
+	return pages, nil
+}
+
+// MoveTreeToProject relinks the given pages (a page and its already-vetted
+// subtree) to targetProjectID: it detaches the root from any parent and replaces
+// every affected page's project_pages link with a single link to the target.
+// Links are hard deleted because project_pages has a (project_id, page_id)
+// unique constraint that ignores soft-delete, so a lingering soft-deleted row
+// would block re-linking. Every query is scoped to workspaceID.
+func (s *PageStore) MoveTreeToProject(ctx context.Context, rootID uuid.UUID, ids []uuid.UUID, targetProjectID, workspaceID, userID uuid.UUID) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		ids, err := collectPageSubtree(ctx, tx, rootID)
-		if err != nil {
-			return err
-		}
-		if err := tx.Model(&model.Page{}).Where("id = ?", rootID).
+		if err := tx.Model(&model.Page{}).Where("id = ? AND workspace_id = ?", rootID, workspaceID).
 			Updates(map[string]any{"parent_id": nil, "updated_by_id": userID}).Error; err != nil {
 			return err
 		}
-		if err := tx.Unscoped().Where("page_id IN ?", ids).Delete(&model.ProjectPage{}).Error; err != nil {
+		if err := tx.Unscoped().Where("page_id IN ? AND workspace_id = ?", ids, workspaceID).
+			Delete(&model.ProjectPage{}).Error; err != nil {
 			return err
 		}
 		links := make([]model.ProjectPage, 0, len(ids))
@@ -324,7 +340,7 @@ func (s *PageStore) MoveTreeToProject(ctx context.Context, rootID, targetProject
 		if err := tx.Create(&links).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.Page{}).Where("id IN ?", ids).
+		return tx.Model(&model.Page{}).Where("id IN ? AND workspace_id = ?", ids, workspaceID).
 			Update("updated_by_id", userID).Error
 	})
 }

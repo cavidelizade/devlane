@@ -339,7 +339,21 @@ func (s *PageService) Move(ctx context.Context, workspaceSlug string, pageID, us
 	if len(projectIDs) == 1 && projectIDs[0] == targetProjectID {
 		return nil, ErrPageSameProject
 	}
-	if err := s.pageStore.MoveTreeToProject(ctx, pageID, targetProjectID, page.WorkspaceID, userID); err != nil {
+	// The move relinks the whole subtree, so the caller must be able to edit
+	// every page in it — otherwise a public parent's owner could drag someone
+	// else's private sub-page into another project.
+	subtree, err := s.pageStore.SubtreePages(ctx, pageID, page.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, 0, len(subtree))
+	for i := range subtree {
+		if !canEditMeta(&subtree[i], userID, isMember) {
+			return nil, ErrPageReadOnly
+		}
+		ids = append(ids, subtree[i].ID)
+	}
+	if err := s.pageStore.MoveTreeToProject(ctx, pageID, ids, targetProjectID, page.WorkspaceID, userID); err != nil {
 		return nil, err
 	}
 	return s.pageStore.GetByID(ctx, pageID)

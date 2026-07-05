@@ -87,6 +87,28 @@ func TestPage_MoveToSameProjectRejected(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rr.Code, "body=%s", rr.Body.String())
 }
 
+func TestPage_MoveRejectedWhenSubtreeNotOwned(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	w := testutil.SeedWorld(t, ts.DB)
+	target := testutil.CreateProject(t, ts.DB, w.Workspace.ID, w.User.ID)
+	other := testutil.CreateUser(t, ts.DB)
+
+	// Root is owned by the caller, but a sub-page is owned by someone else.
+	root := testutil.CreatePage(t, ts.DB, w.Workspace.ID, w.User.ID)
+	linkPageToProject(t, ts, w.Project.ID, root.ID, w.Workspace.ID)
+	child := testutil.CreatePage(t, ts.DB, w.Workspace.ID, other.ID)
+	require.NoError(t, ts.DB.Model(child).Update("parent_id", root.ID).Error)
+	linkPageToProject(t, ts, w.Project.ID, child.ID, w.Workspace.ID)
+
+	base := "/api/workspaces/" + w.Workspace.Slug + "/pages/" + root.ID.String()
+	rr := ts.POST(base+"/move/", map[string]any{"target_project_id": target.ID.String()}, w.Session)
+	require.Equal(t, http.StatusForbidden, rr.Code, "body=%s", rr.Body.String())
+
+	// Nothing moved: the tree stays in the source project.
+	require.Equal(t, int64(1), countPageLinks(t, ts, w.Project.ID, root.ID))
+	require.Zero(t, countPageLinks(t, ts, target.ID, root.ID))
+}
+
 func TestPage_MoveCrossWorkspaceRejected(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	w := testutil.SeedWorld(t, ts.DB)

@@ -941,11 +941,7 @@ export function PageDetailPage() {
             ) : null}
             {moveLoading ? (
               <p className="py-6 text-center text-sm text-(--txt-tertiary)">Loading projects…</p>
-            ) : moveProjects.length === 0 ? (
-              <p className="py-6 text-center text-sm text-(--txt-tertiary)">
-                No other projects available.
-              </p>
-            ) : (
+            ) : moveProjects.length > 0 ? (
               <ul className="max-h-72 space-y-1 overflow-y-auto">
                 {moveProjects.map((p) => (
                   <li key={p.id}>
@@ -963,7 +959,11 @@ export function PageDetailPage() {
                   </li>
                 ))}
               </ul>
-            )}
+            ) : !moveError ? (
+              <p className="py-6 text-center text-sm text-(--txt-tertiary)">
+                No other projects available.
+              </p>
+            ) : null}
           </div>
         </Modal>
       ) : null}
