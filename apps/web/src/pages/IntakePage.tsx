@@ -26,7 +26,9 @@ async function fetchProjectDrafts(
   projectId: string,
 ): Promise<IssueApiResponse[]> {
   const all: IssueApiResponse[] = [];
-  for (let offset = 0; offset < 10000; offset += DRAFT_PAGE_SIZE) {
+  // Keep paging until a short (or empty) page signals the end, so the number of
+  // drafts we can load isn't capped by an arbitrary bound.
+  for (let offset = 0; ; offset += DRAFT_PAGE_SIZE) {
     const batch = await issueService.listWorkspaceDrafts(workspaceSlug, {
       limit: DRAFT_PAGE_SIZE,
       offset,
