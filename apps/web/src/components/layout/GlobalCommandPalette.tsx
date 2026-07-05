@@ -15,6 +15,7 @@ import {
   IterationCw,
   Layers,
   LayoutGrid,
+  LogOut,
   Search,
   Settings,
   User,
@@ -25,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ProjectApiResponse } from '../../api/types';
 import { searchService, type SearchHit, type SearchResults } from '../../services/searchService';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
 
 const WORKSPACE_LEVEL_STORAGE_KEY = 'devlane-command-palette-workspace-level';
 
@@ -86,6 +88,7 @@ export function GlobalCommandPalette({
   onRequestCreateWorkItem,
 }: GlobalCommandPaletteProps) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const isMac = useIsMac();
   const titleId = useId();
   const listId = useId();
@@ -197,6 +200,17 @@ export function GlobalCommandPalette({
         run: () => runAndClose(() => navigate('/settings')),
       },
       {
+        id: 'sign-out',
+        category: 'Account',
+        label: 'Sign out',
+        matchText: 'logout log out',
+        icon: <LogOut className="size-[15px] shrink-0 opacity-90" strokeWidth={2} />,
+        run: () =>
+          runAndClose(() => {
+            void logout();
+          }),
+      },
+      {
         id: 'home',
         category: 'Navigate',
         label: 'Home',
@@ -287,7 +301,16 @@ export function GlobalCommandPalette({
     });
 
     return list;
-  }, [baseUrl, navigate, onRequestCreateWorkItem, projectId, projects, runAndClose, workspaceSlug]);
+  }, [
+    baseUrl,
+    logout,
+    navigate,
+    onRequestCreateWorkItem,
+    projectId,
+    projects,
+    runAndClose,
+    workspaceSlug,
+  ]);
 
   const entityEntries = useMemo((): CommandEntry[] => {
     const q = query.trim();
