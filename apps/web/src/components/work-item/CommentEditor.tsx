@@ -54,7 +54,7 @@ export function CommentEditor({
   submitLabel,
 }: CommentEditorProps) {
   const [access, setAccess] = useState<'INTERNAL' | 'EXTERNAL'>(initialAccess);
-  const [isEmpty, setIsEmpty] = useState(true);
+  const [isEmpty, setIsEmpty] = useState(() => normalize(initialHtml) === '');
   const membersRef = useRef<MentionMember[]>(mentionMembers ?? []);
   useEffect(() => {
     membersRef.current = mentionMembers ?? [];
@@ -87,16 +87,18 @@ export function CommentEditor({
     },
   });
 
+  // Reseed only when the incoming HTML genuinely differs from what's shown, so a
+  // comment-list refetch landing mid-edit doesn't wipe the draft or jump the
+  // cursor. emitUpdate:false keeps the seed from firing onUpdate / dirtying the
+  // doc. There's deliberately no editor.destroy() here — useEditor tears the
+  // instance down on unmount, and destroying it on an initialHtml change left a
+  // dead ProseMirror mounted mid-edit.
   useEffect(() => {
-    if (!editor) return;
-    if (initialHtml !== undefined) {
-      editor.commands.setContent(initialHtml || '');
-      const html = editor.getHTML().trim();
-      setIsEmpty(html === '<p></p>' || html === '');
+    if (!editor || initialHtml === undefined) return;
+    if (normalize(initialHtml) !== normalize(editor.getHTML())) {
+      editor.commands.setContent(initialHtml || '', { emitUpdate: false });
+      setIsEmpty(normalize(editor.getHTML()) === '');
     }
-    return () => {
-      editor.destroy();
-    };
   }, [editor, initialHtml]);
 
   if (!editor) return null;
@@ -269,6 +271,13 @@ export function CommentEditor({
       </div>
     </div>
   );
+}
+
+/** Treat empty, whitespace-only, and empty-paragraph HTML as the same value. */
+function normalize(html: string | undefined | null): string {
+  const s = (html ?? '').trim();
+  if (s === '' || s === '<p></p>' || s === '<p><br></p>') return '';
+  return s;
 }
 
 function Divider() {
