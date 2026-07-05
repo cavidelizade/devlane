@@ -11,13 +11,15 @@ import (
 )
 
 var (
-	ErrPageNotFound    = errors.New("page not found")
-	ErrPageLocked      = errors.New("page is locked")
-	ErrPageArchived    = errors.New("page is archived")
-	ErrPageReadOnly    = errors.New("no permission to edit this page")
-	ErrPageNotArchived = errors.New("page must be archived before deletion")
-	ErrPageBadParent   = errors.New("invalid parent page")
-	ErrPageBadRequest  = errors.New("invalid page request")
+	ErrPageNotFound     = errors.New("page not found")
+	ErrPageLocked       = errors.New("page is locked")
+	ErrPageArchived     = errors.New("page is archived")
+	ErrPageReadOnly     = errors.New("no permission to edit this page")
+	ErrPageNotArchived  = errors.New("page must be archived before deletion")
+	ErrPageBadParent    = errors.New("invalid parent page")
+	ErrPageBadRequest   = errors.New("invalid page request")
+	ErrPageSameProject  = errors.New("page already in target project")
+	ErrPageMoveConflict = errors.New("page tree changed during move")
 )
 
 // PageService handles page business logic and permission gating.
@@ -313,6 +315,52 @@ func (s *PageService) UpdateMeta(ctx context.Context, workspaceSlug string, page
 		return nil, err
 	}
 	return page, nil
+}
+
+// Move relinks a page and its subtree to another project in the same workspace.
+// The caller must be able to edit the page's meta and reach the target project.
+func (s *PageService) Move(ctx context.Context, workspaceSlug string, pageID, userID, targetProjectID uuid.UUID) (*model.Page, error) {
+	page, isMember, err := s.loadAndCheckView(ctx, workspaceSlug, pageID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !canEditMeta(page, userID, isMember) {
+		return nil, ErrPageReadOnly
+	}
+	if page.ArchivedAt != nil {
+		return nil, ErrPageArchived
+	}
+	if err := s.ensureProjectAccess(ctx, workspaceSlug, targetProjectID, userID); err != nil {
+		return nil, err
+	}
+	projectIDs, err := s.pageStore.ListProjectIDsForPage(ctx, pageID)
+	if err != nil {
+		return nil, err
+	}
+	if len(projectIDs) == 1 && projectIDs[0] == targetProjectID {
+		return nil, ErrPageSameProject
+	}
+	// The move relinks the whole subtree, so the caller must be able to edit
+	// every page in it — otherwise a public parent's owner could drag someone
+	// else's private sub-page into another project.
+	subtree, err := s.pageStore.SubtreePages(ctx, pageID, page.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, 0, len(subtree))
+	for i := range subtree {
+		if !canEditMeta(&subtree[i], userID, isMember) {
+			return nil, ErrPageReadOnly
+		}
+		ids = append(ids, subtree[i].ID)
+	}
+	if err := s.pageStore.MoveTreeToProject(ctx, pageID, ids, targetProjectID, page.WorkspaceID, userID); err != nil {
+		if errors.Is(err, store.ErrSubtreeChanged) {
+			return nil, ErrPageMoveConflict
+		}
+		return nil, err
+	}
+	return s.pageStore.GetByID(ctx, pageID)
 }
 
 // validateParent rejects parents that would corrupt the tree:
