@@ -107,8 +107,11 @@ func (h *StateHandler) Update(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
+		Name     string   `json:"name"`
+		Color    string   `json:"color"`
+		Group    *string  `json:"group"`
+		Sequence *float64 `json:"sequence"`
+		Default  *bool    `json:"default"`
 	}
 	_ = c.ShouldBindJSON(&body)
 	var name, color *string
@@ -118,10 +121,14 @@ func (h *StateHandler) Update(c *gin.Context) {
 	if body.Color != "" {
 		color = &body.Color
 	}
-	st, err := h.State.Update(c.Request.Context(), slug, projectID, stateID, user.ID, name, color)
+	st, err := h.State.Update(c.Request.Context(), slug, projectID, stateID, user.ID, name, color, body.Group, body.Sequence, body.Default)
 	if err != nil {
 		if err == service.ErrStateNotFound || err == service.ErrProjectForbidden {
 			c.JSON(http.StatusNotFound, gin.H{"error": "State not found"})
+			return
+		}
+		if err == service.ErrInvalidStateGroup {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid state group"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update state"})

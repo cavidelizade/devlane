@@ -11,6 +11,15 @@ import (
 
 var ErrStateNotFound = errors.New("state not found")
 
+// ErrInvalidStateGroup is returned when an update sets a group outside the
+// accepted workflow groups.
+var ErrInvalidStateGroup = errors.New("invalid state group")
+
+// validStateGroups is the accepted set of workflow-state groups.
+var validStateGroups = map[string]bool{
+	"backlog": true, "unstarted": true, "started": true, "completed": true, "cancelled": true,
+}
+
 // DefaultProjectStateNames are seeded for new projects (without triage).
 var DefaultProjectStateNames = []string{"Backlog", "Todo", "In Progress", "Done", "Cancelled"}
 
@@ -146,7 +155,7 @@ func (s *StateService) GetByID(ctx context.Context, workspaceSlug string, projec
 	return st, nil
 }
 
-func (s *StateService) Update(ctx context.Context, workspaceSlug string, projectID, stateID uuid.UUID, userID uuid.UUID, name, color *string) (*model.State, error) {
+func (s *StateService) Update(ctx context.Context, workspaceSlug string, projectID, stateID uuid.UUID, userID uuid.UUID, name, color, group *string, sequence *float64, isDefault *bool) (*model.State, error) {
 	st, err := s.GetByID(ctx, workspaceSlug, projectID, stateID, userID)
 	if err != nil {
 		return nil, err
@@ -157,8 +166,28 @@ func (s *StateService) Update(ctx context.Context, workspaceSlug string, project
 	if color != nil {
 		st.Color = *color
 	}
+	if group != nil {
+		if !validStateGroups[*group] {
+			return nil, ErrInvalidStateGroup
+		}
+		st.Group = *group
+	}
+	if sequence != nil {
+		st.Sequence = *sequence
+	}
+	// Clearing the default is a plain field write; making a state the default is
+	// atomic (it must clear every other state's flag), so that runs separately.
+	if isDefault != nil && !*isDefault {
+		st.Default = false
+	}
 	if err := s.ss.Update(ctx, st); err != nil {
 		return nil, err
+	}
+	if isDefault != nil && *isDefault {
+		if err := s.ss.SetDefault(ctx, projectID, stateID); err != nil {
+			return nil, err
+		}
+		st.Default = true
 	}
 	return st, nil
 }

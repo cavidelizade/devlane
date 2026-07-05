@@ -66,6 +66,21 @@ func (s *StateStore) Update(ctx context.Context, st *model.State) error {
 	return s.db.WithContext(ctx).Save(st).Error
 }
 
+// SetDefault makes stateID the project's only default state, clearing the flag
+// on every other state in the project in one transaction.
+func (s *StateStore) SetDefault(ctx context.Context, projectID, stateID uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.State{}).
+			Where("project_id = ? AND deleted_at IS NULL", projectID).
+			Updates(map[string]any{"default": false}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.State{}).
+			Where("id = ? AND deleted_at IS NULL", stateID).
+			Updates(map[string]any{"default": true}).Error
+	})
+}
+
 func (s *StateStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.State{}).Error
 }

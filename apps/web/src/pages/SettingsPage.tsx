@@ -300,6 +300,58 @@ export function SettingsPage() {
   const [projectStateName, setProjectStateName] = useState('');
   const [projectStateColor, setProjectStateColor] = useState('#94a3b8');
   const [projectStateGroup, setProjectStateGroup] = useState('backlog');
+
+  const refreshProjectStates = useCallback(async () => {
+    if (!workspaceSlug || !selectedProjectId) return;
+    const list = await stateService.list(workspaceSlug, selectedProjectId);
+    setProjectStates(list ?? []);
+  }, [workspaceSlug, selectedProjectId]);
+
+  const setStateAsDefault = useCallback(
+    async (st: StateApiResponse) => {
+      if (!workspaceSlug || !selectedProjectId) return;
+      try {
+        await stateService.update(workspaceSlug, selectedProjectId, st.id, { default: true });
+        await refreshProjectStates();
+      } catch {
+        // ignore; the list stays as-is on failure
+      }
+    },
+    [workspaceSlug, selectedProjectId, refreshProjectStates],
+  );
+
+  // Move a state up or down within its own group by reassigning sequences for
+  // that group, so the order is well-defined even when states share the default
+  // sequence value.
+  const moveStateWithinGroup = useCallback(
+    async (st: StateApiResponse, direction: -1 | 1) => {
+      if (!workspaceSlug || !selectedProjectId) return;
+      const groupKey = (st.group ?? 'backlog').toLowerCase();
+      const inGroup = projectStates
+        .filter((s) => (s.group ?? 'backlog').toLowerCase() === groupKey)
+        .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+      const from = inGroup.findIndex((s) => s.id === st.id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= inGroup.length) return;
+      const reordered = [...inGroup];
+      [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+      try {
+        await Promise.all(
+          reordered
+            .map((s, i) => ({ s, i }))
+            .filter(({ s, i }) => (s.sequence ?? 0) !== i)
+            .map(({ s, i }) =>
+              stateService.update(workspaceSlug, selectedProjectId, s.id, { sequence: i }),
+            ),
+        );
+        await refreshProjectStates();
+      } catch {
+        // ignore; the list stays as-is on failure
+      }
+    },
+    [workspaceSlug, selectedProjectId, projectStates, refreshProjectStates],
+  );
+
   const [featureCycles, setFeatureCycles] = useState(true);
   const [featureModules, setFeatureModules] = useState(true);
   const [featureViews, setFeatureViews] = useState(true);
@@ -2313,7 +2365,7 @@ export function SettingsPage() {
                               No states in this group.
                             </p>
                           ) : (
-                            states.map((st) => (
+                            states.map((st, stIndex) => (
                               <Card
                                 key={st.id}
                                 variant="outlined"
@@ -2329,8 +2381,40 @@ export function SettingsPage() {
                                   <span className="text-sm font-medium text-(--txt-primary)">
                                     {st.name}
                                   </span>
+                                  {st.default && (
+                                    <span className="rounded-full bg-(--bg-accent-subtle) px-2 py-0.5 text-[11px] font-medium text-(--txt-accent-primary)">
+                                      Default
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    aria-label={`Move ${st.name} up`}
+                                    disabled={stIndex === 0}
+                                    onClick={() => moveStateWithinGroup(st, -1)}
+                                    className="flex size-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary) disabled:opacity-30 disabled:hover:bg-transparent"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Move ${st.name} down`}
+                                    disabled={stIndex === states.length - 1}
+                                    onClick={() => moveStateWithinGroup(st, 1)}
+                                    className="flex size-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary) disabled:opacity-30 disabled:hover:bg-transparent"
+                                  >
+                                    ↓
+                                  </button>
+                                  {!st.default && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => setStateAsDefault(st)}
+                                    >
+                                      Set default
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="secondary"
