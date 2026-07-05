@@ -84,6 +84,28 @@ func (s *AttachmentService) ensureIssueAccess(ctx context.Context, workspaceSlug
 	return nil
 }
 
+// AuthorizeDownload checks that userID may fetch the attachment identified by an
+// object path "attachments/<issueID>/<assetID>". It resolves the attachment
+// record (404 if missing) and requires the caller to be a member of the
+// attachment's workspace, so a leaked object URL can't be fetched by outsiders.
+func (s *AttachmentService) AuthorizeDownload(ctx context.Context, issueID, assetID, userID uuid.UUID) error {
+	att, err := s.is.GetAttachmentByAssetID(ctx, assetID, issueID)
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && att == nil) {
+		return ErrAttachmentNotFound
+	}
+	if err != nil {
+		return err // a real datastore failure — surface it as 5xx, not a 404
+	}
+	ok, err := s.ws.IsMember(ctx, att.WorkspaceID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrProjectForbidden
+	}
+	return nil
+}
+
 // InitiateUpload creates the DB records and returns the presigned upload URL + attachment shape.
 func (s *AttachmentService) InitiateUpload(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, name string, size float64, contentType string) (*PresignedUploadResponse, error) {
 	if s.minio == nil {
