@@ -192,7 +192,15 @@ function renderActivity(
         ),
       };
     case 'link_updated':
-      return { icon: <LinkIcon className="h-3.5 w-3.5" />, sentence: <>updated a link</> };
+      return {
+        icon: <LinkIcon className="h-3.5 w-3.5" />,
+        sentence: (
+          <>
+            updated a link{' '}
+            {a.new_value ? <strong className="text-(--txt-primary)">{a.new_value}</strong> : null}
+          </>
+        ),
+      };
     case 'link_removed':
       return {
         icon: <LinkIcon className="h-3.5 w-3.5" />,
