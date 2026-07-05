@@ -226,16 +226,16 @@ func (h *IssueHandler) Update(c *gin.Context) {
 		Description *string `json:"description"`
 		// description_html is an alias accepted for symmetry with the column
 		// name on the GORM model — frontend can send either.
-		DescriptionHTML *string     `json:"description_html"`
+		DescriptionHTML *string         `json:"description_html"`
 		Priority        string          `json:"priority"`
 		StateID         *uuid.UUID      `json:"state_id"`
 		ParentID        *uuid.UUID      `json:"parent_id"`
 		StartDate       json.RawMessage `json:"start_date"`
 		TargetDate      json.RawMessage `json:"target_date"`
 		AssigneeIDs     []uuid.UUID     `json:"assignee_ids"`
-		LabelIDs        []uuid.UUID `json:"label_ids"`
-		IsDraft         *bool       `json:"is_draft"`
-		Type            string      `json:"type"`
+		LabelIDs        []uuid.UUID     `json:"label_ids"`
+		IsDraft         *bool           `json:"is_draft"`
+		Type            string          `json:"type"`
 		// estimate_point_id: omitted = leave alone, "" = clear, uuid = set.
 		EstimatePointID *string `json:"estimate_point_id"`
 		// sort_order: manual ordering position (drag-to-reorder).
