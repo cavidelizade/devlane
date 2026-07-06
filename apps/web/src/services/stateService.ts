@@ -25,7 +25,13 @@ export const stateService = {
     workspaceSlug: string,
     projectId: string,
     stateId: string,
-    payload: { name?: string; color?: string; group?: string; sequence?: number; default?: boolean },
+    payload: {
+      name?: string;
+      color?: string;
+      group?: string;
+      sequence?: number;
+      default?: boolean;
+    },
   ): Promise<StateApiResponse> {
     const { data } = await apiClient.patch<StateApiResponse>(
       `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/states/${encodeURIComponent(stateId)}/`,
