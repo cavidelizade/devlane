@@ -16,6 +16,29 @@ const priorityVariant: Record<Priority, 'danger' | 'warning' | 'default' | 'neut
   none: 'neutral',
 };
 
+// The draft-issues endpoint caps each request's page size, so fetch every page
+// and keep only this project's drafts — otherwise a project's drafts beyond the
+// first page would silently never show up in Intake.
+const DRAFT_PAGE_SIZE = 100;
+
+async function fetchProjectDrafts(
+  workspaceSlug: string,
+  projectId: string,
+): Promise<IssueApiResponse[]> {
+  const all: IssueApiResponse[] = [];
+  // Keep paging until a short (or empty) page signals the end, so the number of
+  // drafts we can load isn't capped by an arbitrary bound.
+  for (let offset = 0; ; offset += DRAFT_PAGE_SIZE) {
+    const batch = await issueService.listWorkspaceDrafts(workspaceSlug, {
+      limit: DRAFT_PAGE_SIZE,
+      offset,
+    });
+    all.push(...batch);
+    if (batch.length < DRAFT_PAGE_SIZE) break;
+  }
+  return all.filter((i) => i.project_id === projectId);
+}
+
 export function IntakePage() {
   const { workspaceSlug, projectId } = useParams<{ workspaceSlug: string; projectId: string }>();
   const [loading, setLoading] = useState(true);
@@ -36,13 +59,15 @@ export function IntakePage() {
     Promise.all([
       workspaceService.getBySlug(workspaceSlug),
       projectService.get(workspaceSlug, projectId),
-      issueService.list(workspaceSlug, projectId, { limit: 500 }),
+      // Read from the draft list, not the active issue list (which no longer
+      // returns drafts).
+      fetchProjectDrafts(workspaceSlug, projectId),
     ])
-      .then(([w, p, issues]) => {
+      .then(([w, p, projectDrafts]) => {
         if (cancelled) return;
         setWorkspace(w ?? null);
         setProject(p ?? null);
-        setDrafts((issues ?? []).filter((i) => i.is_draft));
+        setDrafts(projectDrafts);
       })
       .catch(() => {
         if (!cancelled) {

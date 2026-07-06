@@ -76,8 +76,10 @@ func (s *IssueStore) ListByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Is
 
 func (s *IssueStore) ListByProjectID(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]model.Issue, error) {
 	var list []model.Issue
+	// Drafts belong in Drafts / Intake, not the active project list. IS NOT TRUE
+	// keeps false and any legacy NULL rows while excluding only real drafts.
 	q := s.db.WithContext(ctx).
-		Where("project_id = ? AND deleted_at IS NULL AND archived_at IS NULL", projectID).
+		Where("project_id = ? AND deleted_at IS NULL AND archived_at IS NULL AND is_draft IS NOT TRUE", projectID).
 		Order("sort_order ASC, created_at DESC")
 	if limit > 0 {
 		q = q.Limit(limit)
