@@ -739,6 +739,14 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 				s.notify.IssueMentioned(ctx, issue, userID, added, "description")
 			}
 		}
+		// Snapshot the pre-edit description so history can be browsed and restored.
+		// Fire-and-forget: a version write must not fail the update.
+		_ = s.is.CreateDescriptionVersion(ctx, &model.IssueDescriptionVersion{
+			IssueID:         issue.ID,
+			DescriptionHTML: prevDescription,
+			CreatedByID:     &userID,
+			OwnedByID:       &userID,
+		})
 	}
 
 	if assigneeIDs != nil {
@@ -819,6 +827,43 @@ func (s *IssueService) ListAssignees(ctx context.Context, workspaceSlug string, 
 		return nil, err
 	}
 	return s.is.ListAssigneesForIssue(ctx, issueID)
+}
+
+// ListDescriptionVersions returns the issue's description history (newest first).
+func (s *IssueService) ListDescriptionVersions(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID) ([]model.IssueDescriptionVersion, error) {
+	if _, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+		return nil, err
+	}
+	return s.is.ListDescriptionVersions(ctx, issueID)
+}
+
+// RestoreDescriptionVersion sets the issue's description back to a past version.
+// The current description is snapshotted first so a restore is itself undoable.
+func (s *IssueService) RestoreDescriptionVersion(ctx context.Context, workspaceSlug string, projectID, issueID, versionID uuid.UUID, userID uuid.UUID) (*model.Issue, error) {
+	issue, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID)
+	if err != nil {
+		return nil, err
+	}
+	version, err := s.is.GetDescriptionVersion(ctx, versionID)
+	if err != nil || version.IssueID != issue.ID {
+		return nil, ErrIssueNotFound
+	}
+	if version.DescriptionHTML == issue.DescriptionHTML {
+		return issue, nil // nothing to restore
+	}
+	// Snapshot the current description before overwriting it.
+	_ = s.is.CreateDescriptionVersion(ctx, &model.IssueDescriptionVersion{
+		IssueID:         issue.ID,
+		DescriptionHTML: issue.DescriptionHTML,
+		CreatedByID:     &userID,
+		OwnedByID:       &userID,
+	})
+	issue.DescriptionHTML = version.DescriptionHTML
+	issue.UpdatedByID = &userID
+	if err := s.is.Update(ctx, issue); err != nil {
+		return nil, err
+	}
+	return issue, nil
 }
 
 func (s *IssueService) AddAssignee(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, assigneeID uuid.UUID) error {

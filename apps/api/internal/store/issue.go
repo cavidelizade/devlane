@@ -161,6 +161,31 @@ func (s *IssueStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Issue{}).Error
 }
 
+// ----- Issue description versions -----
+
+func (s *IssueStore) CreateDescriptionVersion(ctx context.Context, v *model.IssueDescriptionVersion) error {
+	return s.db.WithContext(ctx).Create(v).Error
+}
+
+// ListDescriptionVersions returns an issue's description history, newest first.
+func (s *IssueStore) ListDescriptionVersions(ctx context.Context, issueID uuid.UUID) ([]model.IssueDescriptionVersion, error) {
+	var list []model.IssueDescriptionVersion
+	err := s.db.WithContext(ctx).
+		Where("issue_id = ?", issueID).
+		Order("created_at DESC").
+		Find(&list).Error
+	return list, err
+}
+
+func (s *IssueStore) GetDescriptionVersion(ctx context.Context, versionID uuid.UUID) (*model.IssueDescriptionVersion, error) {
+	var v model.IssueDescriptionVersion
+	err := s.db.WithContext(ctx).Where("id = ?", versionID).First(&v).Error
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // BulkUpdateFields updates the given columns for many issues scoped to a
 // project. Returns the number of rows affected.
 func (s *IssueStore) BulkUpdateFields(ctx context.Context, projectID uuid.UUID, ids []uuid.UUID, updates map[string]any) (int64, error) {

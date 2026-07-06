@@ -336,6 +336,8 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/", issueHandler.AddAssignee)
 		api.PUT("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/", issueHandler.ReplaceAssignees)
 		api.DELETE("/workspaces/:slug/projects/:projectId/issues/:pk/assignees/:assigneeId/", issueHandler.RemoveAssignee)
+		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/description-versions/", issueHandler.ListDescriptionVersions)
+		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/description-versions/:versionId/restore/", issueHandler.RestoreDescriptionVersion)
 		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/activities/", issueHandler.ListActivities)
 		api.GET("/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/", issueHandler.ListRelations)
 		api.POST("/workspaces/:slug/projects/:projectId/issues/:pk/issue-relation/", issueHandler.CreateRelations)
