@@ -313,6 +313,7 @@ func New(cfg Config) *gin.Engine {
 
 		api.GET("/workspaces/:slug/projects/:projectId/states/", stateHandler.List)
 		api.POST("/workspaces/:slug/projects/:projectId/states/", stateHandler.Create)
+		api.POST("/workspaces/:slug/projects/:projectId/states/reorder/", stateHandler.Reorder)
 		api.PATCH("/workspaces/:slug/projects/:projectId/states/:pk/", stateHandler.Update)
 		api.DELETE("/workspaces/:slug/projects/:projectId/states/:pk/", stateHandler.Delete)
 

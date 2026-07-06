@@ -336,13 +336,12 @@ export function SettingsPage() {
       const reordered = [...inGroup];
       [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
       try {
-        await Promise.all(
-          reordered
-            .map((s, i) => ({ s, i }))
-            .filter(({ s, i }) => (s.sequence ?? 0) !== i)
-            .map(({ s, i }) =>
-              stateService.update(workspaceSlug, selectedProjectId, s.id, { sequence: i }),
-            ),
+        // One atomic backend call so a partial failure can't leave the group's
+        // order half-applied.
+        await stateService.reorder(
+          workspaceSlug,
+          selectedProjectId,
+          reordered.map((s, i) => ({ id: s.id, sequence: i })),
         );
         await refreshProjectStates();
       } catch {

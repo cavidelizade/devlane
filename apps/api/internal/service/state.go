@@ -160,29 +160,37 @@ func (s *StateService) Update(ctx context.Context, workspaceSlug string, project
 	if err != nil {
 		return nil, err
 	}
+	// Write only the columns that changed so a full-row save can't clobber the
+	// default flag (which is owned by the atomic SetDefault path).
+	changed := map[string]any{}
 	if name != nil {
 		st.Name = *name
+		changed["name"] = *name
 	}
 	if color != nil {
 		st.Color = *color
+		changed["color"] = *color
 	}
 	if group != nil {
 		if !validStateGroups[*group] {
 			return nil, ErrInvalidStateGroup
 		}
 		st.Group = *group
+		changed["group"] = *group
 	}
 	if sequence != nil {
 		st.Sequence = *sequence
+		changed["sequence"] = *sequence
 	}
-	// Clearing the default is a plain field write; making a state the default is
-	// atomic (it must clear every other state's flag), so that runs separately.
 	if isDefault != nil && !*isDefault {
 		st.Default = false
+		changed["default"] = false
 	}
-	if err := s.ss.Update(ctx, st); err != nil {
+	if err := s.ss.UpdateFields(ctx, stateID, changed); err != nil {
 		return nil, err
 	}
+	// Making a state the default must clear every other state's flag, so it runs
+	// as its own atomic operation.
 	if isDefault != nil && *isDefault {
 		if err := s.ss.SetDefault(ctx, projectID, stateID); err != nil {
 			return nil, err
@@ -190,6 +198,15 @@ func (s *StateService) Update(ctx context.Context, workspaceSlug string, project
 		st.Default = true
 	}
 	return st, nil
+}
+
+// Reorder atomically assigns new sequence values to a set of the project's
+// states so a partial failure can't leave the order half-applied.
+func (s *StateService) Reorder(ctx context.Context, workspaceSlug string, projectID uuid.UUID, userID uuid.UUID, items []store.StateSequence) error {
+	if _, err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
+		return err
+	}
+	return s.ss.ReorderSequences(ctx, projectID, items)
 }
 
 func (s *StateService) Delete(ctx context.Context, workspaceSlug string, projectID, stateID uuid.UUID, userID uuid.UUID) error {

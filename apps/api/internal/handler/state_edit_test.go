@@ -42,3 +42,28 @@ func TestState_UpdateGroupSequenceAndDefault(t *testing.T) {
 	require.Equal(t, "started", got2.Group)
 	require.Equal(t, float64(5), got2.Sequence)
 }
+
+// Reorder assigns new sequences to several states atomically in one request.
+func TestState_ReorderSequences(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	w := testutil.SeedWorld(t, ts.DB)
+	s1 := testutil.CreateState(t, ts.DB, w.Project.ID, w.Workspace.ID)
+	s2 := testutil.CreateState(t, ts.DB, w.Project.ID, w.Workspace.ID)
+	s3 := testutil.CreateState(t, ts.DB, w.Project.ID, w.Workspace.ID)
+	base := "/api/workspaces/" + w.Workspace.Slug + "/projects/" + w.Project.ID.String() + "/states/"
+
+	body := map[string]any{"states": []map[string]any{
+		{"id": s3.ID.String(), "sequence": 0},
+		{"id": s1.ID.String(), "sequence": 1},
+		{"id": s2.ID.String(), "sequence": 2},
+	}}
+	require.Equal(t, http.StatusNoContent, ts.POST(base+"reorder/", body, w.Session).Code)
+
+	var g1, g2, g3 model.State
+	require.NoError(t, ts.DB.First(&g1, "id = ?", s1.ID).Error)
+	require.NoError(t, ts.DB.First(&g2, "id = ?", s2.ID).Error)
+	require.NoError(t, ts.DB.First(&g3, "id = ?", s3.ID).Error)
+	require.Equal(t, float64(0), g3.Sequence)
+	require.Equal(t, float64(1), g1.Sequence)
+	require.Equal(t, float64(2), g2.Sequence)
+}

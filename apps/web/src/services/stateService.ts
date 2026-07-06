@@ -40,6 +40,17 @@ export const stateService = {
     return data;
   },
 
+  async reorder(
+    workspaceSlug: string,
+    projectId: string,
+    states: { id: string; sequence: number }[],
+  ): Promise<void> {
+    await apiClient.post(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/states/reorder/`,
+      { states },
+    );
+  },
+
   async delete(workspaceSlug: string, projectId: string, stateId: string): Promise<void> {
     await apiClient.delete(
       `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/states/${encodeURIComponent(stateId)}/`,
