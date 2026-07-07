@@ -741,6 +741,15 @@ export interface PageVersionApiResponse {
   updated_at: string;
 }
 
+export interface IssueDescriptionVersionApiResponse {
+  id: string;
+  issue_id: string;
+  description_html?: string;
+  created_by_id?: string | null;
+  owned_by_id?: string | null;
+  created_at: string;
+}
+
 /**
  * Reason a notification was created. Server-set; drives how the inbox row renders.
  */

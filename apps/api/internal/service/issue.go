@@ -678,6 +678,19 @@ func (s *IssueService) Update(ctx context.Context, workspaceSlug string, project
 	if sortOrder != nil {
 		issue.SortOrder = *sortOrder
 	}
+	// Snapshot the previous description before it's overwritten, so the history
+	// is complete and recoverable. Done before the save so a snapshot failure
+	// aborts the edit rather than silently losing the prior text.
+	if description != nil && prevDescription != issue.DescriptionHTML {
+		if err := s.is.CreateDescriptionVersion(ctx, &model.IssueDescriptionVersion{
+			IssueID:         issue.ID,
+			DescriptionHTML: prevDescription,
+			CreatedByID:     &userID,
+			OwnedByID:       &userID,
+		}); err != nil {
+			return nil, err
+		}
+	}
 	issue.UpdatedByID = &userID
 	if err := s.is.Update(ctx, issue); err != nil {
 		return nil, err
@@ -819,6 +832,46 @@ func (s *IssueService) ListAssignees(ctx context.Context, workspaceSlug string, 
 		return nil, err
 	}
 	return s.is.ListAssigneesForIssue(ctx, issueID)
+}
+
+// ListDescriptionVersions returns the issue's description history (newest first).
+func (s *IssueService) ListDescriptionVersions(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID) ([]model.IssueDescriptionVersion, error) {
+	if _, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID); err != nil {
+		return nil, err
+	}
+	return s.is.ListDescriptionVersions(ctx, issueID)
+}
+
+// RestoreDescriptionVersion sets the issue's description back to a past version.
+// The current description is snapshotted first so a restore is itself undoable.
+func (s *IssueService) RestoreDescriptionVersion(ctx context.Context, workspaceSlug string, projectID, issueID, versionID uuid.UUID, userID uuid.UUID) (*model.Issue, error) {
+	issue, err := s.GetByID(ctx, workspaceSlug, projectID, issueID, userID)
+	if err != nil {
+		return nil, err
+	}
+	version, err := s.is.GetDescriptionVersion(ctx, versionID)
+	if err != nil || version.IssueID != issue.ID {
+		return nil, ErrIssueNotFound
+	}
+	if version.DescriptionHTML == issue.DescriptionHTML {
+		return issue, nil // nothing to restore
+	}
+	// Snapshot the current description before overwriting it. Abort on failure so
+	// a restore never destroys the current text without recording it first.
+	if err := s.is.CreateDescriptionVersion(ctx, &model.IssueDescriptionVersion{
+		IssueID:         issue.ID,
+		DescriptionHTML: issue.DescriptionHTML,
+		CreatedByID:     &userID,
+		OwnedByID:       &userID,
+	}); err != nil {
+		return nil, err
+	}
+	issue.DescriptionHTML = version.DescriptionHTML
+	issue.UpdatedByID = &userID
+	if err := s.is.Update(ctx, issue); err != nil {
+		return nil, err
+	}
+	return issue, nil
 }
 
 func (s *IssueService) AddAssignee(ctx context.Context, workspaceSlug string, projectID, issueID uuid.UUID, userID uuid.UUID, assigneeID uuid.UUID) error {
