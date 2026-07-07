@@ -157,6 +157,28 @@ func (s *IssueStore) Update(ctx context.Context, i *model.Issue) error {
 	return s.db.WithContext(ctx).Save(i).Error
 }
 
+// UpdateFields writes only the given columns for one issue. Unlike Update
+// (a full-row Save), a concurrent PATCH that changed a different field is not
+// clobbered, since each writer only touches the columns it actually changed.
+func (s *IssueStore) UpdateFields(ctx context.Context, issueID uuid.UUID, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	res := s.db.WithContext(ctx).
+		Model(&model.Issue{}).
+		Where("id = ? AND deleted_at IS NULL", issueID).
+		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	// No matching live row means the issue was deleted since it was loaded; surface
+	// that instead of silently reporting success.
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (s *IssueStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Issue{}).Error
 }
