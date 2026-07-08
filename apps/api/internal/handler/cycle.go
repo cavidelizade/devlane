@@ -318,6 +318,59 @@ func (h *CycleHandler) Progress(c *gin.Context) {
 	c.JSON(http.StatusOK, snap)
 }
 
+// CompleteCycle marks a cycle completed and optionally transfers its incomplete
+// work items to another cycle.
+// POST /api/workspaces/:slug/projects/:projectId/cycles/:cycleId/transfer-issues/
+func (h *CycleHandler) CompleteCycle(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+	slug := c.Param("slug")
+	projectID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+	cycleID, err := uuid.Parse(c.Param("cycleId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cycle ID"})
+		return
+	}
+	var body struct {
+		TargetCycleID string `json:"target_cycle_id"`
+	}
+	// An empty body is allowed: complete without transferring.
+	if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
+		return
+	}
+	var targetCycleID *uuid.UUID
+	if body.TargetCycleID != "" {
+		tid, err := uuid.Parse(body.TargetCycleID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target_cycle_id"})
+			return
+		}
+		targetCycleID = &tid
+	}
+	cy, moved, err := h.Cycle.CompleteCycle(c.Request.Context(), slug, projectID, cycleID, targetCycleID, user.ID)
+	if err != nil {
+		if err == service.ErrCycleNotFound || err == service.ErrProjectForbidden || err == service.ErrProjectNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+		if err == service.ErrInvalidTargetCycle {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target cycle"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete cycle"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"cycle": cy, "transferred_count": moved})
+}
+
 // Analytics returns the distribution analytics for the cycle.
 // GET /api/workspaces/:slug/projects/:projectId/cycles/:cycleId/analytics
 func (h *CycleHandler) Analytics(c *gin.Context) {
