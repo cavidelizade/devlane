@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button, Modal } from '../../ui';
 import { IconChevronDown } from '../icons';
 import { issueService } from '../../../services/issueService';
@@ -41,6 +42,7 @@ export function ExportModal({
   setExporting,
   setExportProjectOpen,
 }: ExportModalProps) {
+  const [error, setError] = useState<string | null>(null);
   return (
     <Modal
       open={open}
@@ -59,6 +61,7 @@ export function ExportModal({
             disabled={exporting}
             onClick={async () => {
               if (!workspaceSlug) return;
+              setError(null);
               setExporting(true);
               try {
                 const projectIds =
@@ -139,7 +142,7 @@ export function ExportModal({
                 downloadBlob(blob, filename);
                 setExportProjectOpen(false);
               } catch {
-                // could set export error state
+                setError('Export failed. Please try again.');
               } finally {
                 setExporting(false);
               }
@@ -174,6 +177,7 @@ export function ExportModal({
             Exports as a real Excel workbook (.xlsx) generated on the server.
           </p>
         )}
+        {error && <p className="mt-2 text-sm text-(--txt-danger-primary)">{error}</p>}
       </div>
     </Modal>
   );

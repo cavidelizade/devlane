@@ -10,6 +10,7 @@ import (
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 )
 
 // ErrNoProjectsSelected is returned when an export names no projects.
@@ -34,16 +35,27 @@ func NewExportService(exporters *store.ExporterStore, issues *store.IssueStore, 
 func (s *ExportService) ExportIssues(ctx context.Context, slug string, userID uuid.UUID, projectIDs []uuid.UUID, name string) (string, []byte, error) {
 	wrk, err := s.ws.GetBySlug(ctx, slug)
 	if err != nil {
-		return "", nil, ErrWorkspaceNotFound
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil, ErrWorkspaceNotFound
+		}
+		return "", nil, err
 	}
-	if ok, _ := s.ws.IsMember(ctx, wrk.ID, userID); !ok {
+	ok, err := s.ws.IsMember(ctx, wrk.ID, userID)
+	if err != nil {
+		return "", nil, err
+	}
+	if !ok {
 		return "", nil, ErrWorkspaceForbidden
 	}
 	if len(projectIDs) == 0 {
 		return "", nil, ErrNoProjectsSelected
 	}
 	for _, pid := range projectIDs {
-		if in, _ := s.ps.IsInWorkspace(ctx, pid, wrk.ID); !in {
+		in, err := s.ps.IsInWorkspace(ctx, pid, wrk.ID)
+		if err != nil {
+			return "", nil, err
+		}
+		if !in {
 			return "", nil, ErrProjectNotFound
 		}
 	}
@@ -77,9 +89,16 @@ func (s *ExportService) ExportIssues(ctx context.Context, slug string, userID uu
 func (s *ExportService) ListHistory(ctx context.Context, slug string, userID uuid.UUID) ([]model.Exporter, error) {
 	wrk, err := s.ws.GetBySlug(ctx, slug)
 	if err != nil {
-		return nil, ErrWorkspaceNotFound
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWorkspaceNotFound
+		}
+		return nil, err
 	}
-	if ok, _ := s.ws.IsMember(ctx, wrk.ID, userID); !ok {
+	ok, err := s.ws.IsMember(ctx, wrk.ID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, ErrWorkspaceForbidden
 	}
 	return s.exporters.ListByWorkspaceID(ctx, wrk.ID)
