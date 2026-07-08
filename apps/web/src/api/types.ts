@@ -67,6 +67,8 @@ export interface CreateProjectRequest {
   project_lead_id?: string;
   default_assignee_id?: string;
   guest_view_all_features?: boolean;
+  /** 2 = public (any workspace member), 0 = secret (members only). */
+  network?: number;
   module_view?: boolean;
   cycle_view?: boolean;
   issue_views_view?: boolean;
@@ -96,6 +98,8 @@ export interface ProjectApiResponse {
   project_lead_id?: string | null;
   default_assignee_id?: string | null;
   guest_view_all_features?: boolean;
+  /** 2 = public (any workspace member), 0 = secret (members only). */
+  network?: number;
   module_view?: boolean;
   cycle_view?: boolean;
   issue_views_view?: boolean;

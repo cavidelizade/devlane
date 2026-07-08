@@ -55,6 +55,21 @@ func (s *ProjectStore) ListByWorkspaceID(ctx context.Context, workspaceID uuid.U
 	return list, err
 }
 
+// ListVisibleByWorkspaceID returns the projects a user may see: every public
+// project in the workspace, plus any project (public or secret) they belong to.
+func (s *ProjectStore) ListVisibleByWorkspaceID(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.Project, error) {
+	var list []model.Project
+	memberProjects := s.db.Model(&model.ProjectMember{}).
+		Select("project_id").
+		Where("member_id = ? AND deleted_at IS NULL", userID)
+	err := s.db.WithContext(ctx).
+		Where("workspace_id = ? AND deleted_at IS NULL", workspaceID).
+		Where("network = ? OR id IN (?)", model.NetworkPublic, memberProjects).
+		Order("created_at ASC").
+		Find(&list).Error
+	return list, err
+}
+
 func (s *ProjectStore) Update(ctx context.Context, p *model.Project) error {
 	return s.db.WithContext(ctx).Save(p).Error
 }
