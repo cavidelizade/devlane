@@ -779,12 +779,14 @@ export function ViewDetailPage() {
     setSaving(true);
     try {
       const { displayFilters, displayProperties } = savedViewDisplayToRecords(settings);
-      const updated = await viewService.update(workspaceSlug, viewId, {
+      await viewService.update(workspaceSlug, viewId, {
         filters: workspaceViewFiltersToSearchParams(workspaceViewFilters),
         display_filters: displayFilters,
         display_properties: displayProperties,
       });
-      setView(updated);
+      // Don't re-set `view` here: the just-saved values already live in
+      // workspaceViewFilters + settings, and replacing `view` would re-run the
+      // filters-sync effect and clear this "Saved" acknowledgement immediately.
       setSaveState('saved');
     } catch {
       setSaveState('error');
