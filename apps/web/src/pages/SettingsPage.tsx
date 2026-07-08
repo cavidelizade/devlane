@@ -221,8 +221,8 @@ export function SettingsPage() {
       setProjectName(selectedProject.name);
       setProjectDescription(selectedProject.description ?? '');
       if (selectedProject.timezone != null) setProjectTimezone(selectedProject.timezone);
-      // Derive Network dropdown value from guest_view_all_features so it reflects persisted visibility
-      setProjectNetwork(selectedProject.guest_view_all_features ? 'public' : 'private');
+      // Reflect the project's persisted network visibility (2 = public, 0 = secret).
+      setProjectNetwork(selectedProject.network === 0 ? 'private' : 'public');
       setProjectLeadId(selectedProject.project_lead_id ?? null);
       setDefaultAssigneeId(selectedProject.default_assignee_id ?? null);
       setGuestAccess(selectedProject.guest_view_all_features ?? false);
@@ -242,6 +242,7 @@ export function SettingsPage() {
     selectedProject?.project_lead_id,
     selectedProject?.default_assignee_id,
     selectedProject?.guest_view_all_features,
+    selectedProject?.network,
     selectedProject?.cycle_view,
     selectedProject?.module_view,
     selectedProject?.issue_views_view,
@@ -1713,22 +1714,22 @@ export function SettingsPage() {
                 <ProjectNetworkSelect
                   value={projectNetwork}
                   onChange={async (v) => {
-                    // Map network dropdown to the same guest_view_all_features flag used elsewhere
-                    const nextGuestAccess = v === 'public';
-                    setProjectNetwork(v);
-                    setGuestAccess(nextGuestAccess);
                     if (!workspaceSlug || !selectedProjectId) return;
+                    const prev = projectNetwork;
+                    setProjectNetwork(v);
                     try {
                       const updated = await projectService.update(
                         workspaceSlug,
                         selectedProjectId,
-                        { guest_view_all_features: nextGuestAccess },
+                        {
+                          network: v === 'public' ? 2 : 0,
+                        },
                       );
-                      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+                      setProjects((prevProjects) =>
+                        prevProjects.map((p) => (p.id === updated.id ? updated : p)),
+                      );
                     } catch {
-                      // revert local state on failure
-                      setProjectNetwork(nextGuestAccess ? 'private' : 'public');
-                      setGuestAccess(!nextGuestAccess);
+                      setProjectNetwork(prev); // revert on failure
                     }
                   }}
                 />

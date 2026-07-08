@@ -10,6 +10,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// Project network (visibility) values.
+const (
+	// NetworkSecret projects are visible only to their members (and workspace admins).
+	NetworkSecret int16 = 0
+	// NetworkPublic projects are visible to every member of the workspace.
+	NetworkPublic int16 = 2
+)
+
 // JSONMap for JSONB columns.
 type JSONMap map[string]interface{}
 
