@@ -33,26 +33,26 @@ type NotificationService struct {
 	prefs    *store.UserNotificationPreferenceStore // optional — preference gating
 	log      *slog.Logger
 	emailLog *store.EmailNotificationLogStore // optional — email notification audit logging
-	queue    *queue.Publisher                  // optional — RabbitMQ publisher for email notifications
-	appURL   string                            // optional — base URL for issue links in notification emails
+	queue    *queue.Publisher                 // optional — RabbitMQ publisher for email notifications
+	appURL   string                           // optional — base URL for issue links in notification emails
 }
 
 func NewNotificationService(
-    ns *store.NotificationStore,
-    ws *store.WorkspaceStore,
-    is *store.IssueStore,
-    ps *store.ProjectStore,
-    us *store.UserStore,
-    ss *store.StateStore,
+	ns *store.NotificationStore,
+	ws *store.WorkspaceStore,
+	is *store.IssueStore,
+	ps *store.ProjectStore,
+	us *store.UserStore,
+	ss *store.StateStore,
 ) *NotificationService {
-    return &NotificationService{
-        ns: ns,
-        ws: ws,
-        is: is,
-        ps: ps,
-        us: us,
-        ss: ss,
-    }
+	return &NotificationService{
+		ns: ns,
+		ws: ws,
+		is: is,
+		ps: ps,
+		us: us,
+		ss: ss,
+	}
 }
 
 // SetSubscriberStore wires per-issue subscriber lookups so subscribers are
@@ -326,7 +326,6 @@ func (s *NotificationService) emit(ctx context.Context, receivers []uuid.UUID, p
 	if err := s.ns.CreateMany(ctx, rows); err != nil {
 		s.logger().Warn("notification fan-out failed", "err", err, "issue_id", params.issue.ID, "receivers", len(rows))
 	}
-
 
 	// Queue notification emails if email infrastructure is available.
 	// This runs synchronously but logs+swallows errors to avoid breaking in-app notifications.

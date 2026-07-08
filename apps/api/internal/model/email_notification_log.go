@@ -18,8 +18,8 @@ type EmailNotificationLog struct {
 	EntityName       string     `gorm:"type:varchar(255)" json:"entity_name,omitempty"`
 	Data             JSONMap    `gorm:"type:jsonb;serializer:json" json:"data,omitempty"`
 	ProcessedAt      *time.Time `gorm:"type:timestamptz" json:"processed_at,omitempty"`
-	SentAt           *time.Time `gorm:"type:timestamptz" json:"sent_at,omitempty"` // When queued to RabbitMQ
-	Entity           string     `gorm:"type:varchar(200)" json:"entity,omitempty"`  // Legacy
+	SentAt           *time.Time `gorm:"type:timestamptz" json:"sent_at,omitempty"`    // When queued to RabbitMQ
+	Entity           string     `gorm:"type:varchar(200)" json:"entity,omitempty"`    // Legacy
 	OldValue         string     `gorm:"type:varchar(300)" json:"old_value,omitempty"` // Legacy
 	NewValue         string     `gorm:"type:varchar(300)" json:"new_value,omitempty"` // Legacy
 	CreatedAt        time.Time  `json:"created_at"`
