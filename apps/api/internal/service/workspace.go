@@ -22,6 +22,11 @@ var (
 	ErrSlugTaken          = errors.New("slug already in use")
 	ErrInviteNotFound     = errors.New("invite not found")
 	ErrMemberNotFound     = errors.New("member not found")
+	// ErrTokenNotFound is returned when a workspace service token to revoke does not exist.
+	ErrTokenNotFound = errors.New("token not found")
+	// ErrApiTokensNotConfigured is returned when the token store was never wired
+	// on the service (a configuration gap, not a client error).
+	ErrApiTokensNotConfigured = errors.New("api token store not configured")
 )
 
 var (
@@ -54,7 +59,7 @@ func (s *WorkspaceService) ListTokens(ctx context.Context, slug string, userID u
 		return nil, err
 	}
 	if s.apiTokens == nil {
-		return []model.ApiToken{}, nil
+		return nil, ErrApiTokensNotConfigured
 	}
 	return s.apiTokens.ListByWorkspaceID(ctx, w.ID)
 }
@@ -69,7 +74,7 @@ func (s *WorkspaceService) CreateToken(ctx context.Context, slug string, userID 
 		return "", err
 	}
 	if s.apiTokens == nil {
-		return "", ErrWorkspaceNotFound
+		return "", ErrApiTokensNotConfigured
 	}
 	return s.apiTokens.CreateForWorkspace(ctx, userID, w.ID, label, description, expiredAt)
 }
@@ -84,9 +89,15 @@ func (s *WorkspaceService) RevokeToken(ctx context.Context, slug string, tokenID
 		return err
 	}
 	if s.apiTokens == nil {
-		return ErrWorkspaceNotFound
+		return ErrApiTokensNotConfigured
 	}
-	return s.apiTokens.DeleteByWorkspace(ctx, tokenID, w.ID)
+	if err := s.apiTokens.DeleteByWorkspace(ctx, tokenID, w.ID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrTokenNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *WorkspaceService) ListForUser(ctx context.Context, userID uuid.UUID) ([]model.Workspace, error) {

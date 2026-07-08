@@ -24,6 +24,7 @@ export function WorkspaceApiTokensPanel({ workspaceSlug }: WorkspaceApiTokensPan
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const [form, setForm] = useState({ label: '', description: '', expiresIn: '' });
 
   useEffect(() => {
@@ -91,9 +92,12 @@ export function WorkspaceApiTokensPanel({ workspaceSlug }: WorkspaceApiTokensPan
 
   const handleRevoke = async (tokenId: string) => {
     setRevokingId(tokenId);
+    setRevokeError(null);
     try {
       await workspaceService.revokeToken(workspaceSlug, tokenId);
       setTokens((prev) => prev.filter((t) => t.id !== tokenId));
+    } catch {
+      setRevokeError('Could not revoke the token. Please try again.');
     } finally {
       setRevokingId(null);
     }
@@ -131,6 +135,7 @@ export function WorkspaceApiTokensPanel({ workspaceSlug }: WorkspaceApiTokensPan
         </Card>
       ) : (
         <div className="space-y-2">
+          {revokeError && <p className="text-sm text-(--txt-danger-primary)">{revokeError}</p>}
           {tokens.map((t) => (
             <div
               key={t.id}

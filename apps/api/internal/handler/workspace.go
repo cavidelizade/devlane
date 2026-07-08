@@ -12,7 +12,6 @@ import (
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // WorkspaceHandler serves workspace and member/invite endpoints.
@@ -639,7 +638,7 @@ func (h *WorkspaceHandler) RevokeToken(c *gin.Context) {
 		return
 	}
 	if err := h.Workspace.RevokeToken(c.Request.Context(), slug, tokenID, user.ID); err != nil {
-		if err == service.ErrWorkspaceNotFound || err == gorm.ErrRecordNotFound {
+		if err == service.ErrWorkspaceNotFound || err == service.ErrTokenNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Token not found"})
 			return
 		}

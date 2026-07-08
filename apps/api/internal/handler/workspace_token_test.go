@@ -68,4 +68,7 @@ func TestWorkspace_ServiceTokens(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(lr2.Body.Bytes(), &after))
 	require.Empty(t, after.Tokens)
+
+	// Revoking a token that no longer exists is a 404 (not a 5xx).
+	require.Equal(t, http.StatusNotFound, ts.DELETE(tokensURL+tokenID+"/", w.Session).Code)
 }
