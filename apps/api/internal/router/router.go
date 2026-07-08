@@ -136,6 +136,7 @@ func New(cfg Config) *gin.Engine {
 
 	// Services
 	workspaceSvc := service.NewWorkspaceService(workspaceStore, workspaceInviteStore, userStore)
+	workspaceSvc.SetApiTokenStore(apiTokenStore)
 	projectSvc := service.NewProjectService(projectStore, projectInviteStore, workspaceStore, userStore)
 	stateSvc := service.NewStateService(stateStore, projectStore, workspaceStore)
 	labelSvc := service.NewLabelService(labelStore, projectStore, workspaceStore)
@@ -285,6 +286,9 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/", workspaceHandler.GetBySlug)
 		api.PATCH("/workspaces/:slug/", workspaceHandler.Update)
 		api.DELETE("/workspaces/:slug/", workspaceHandler.Delete)
+		api.GET("/workspaces/:slug/tokens/", workspaceHandler.ListTokens)
+		api.POST("/workspaces/:slug/tokens/", workspaceHandler.CreateToken)
+		api.DELETE("/workspaces/:slug/tokens/:id/", workspaceHandler.RevokeToken)
 		api.GET("/workspaces/:slug/members/", workspaceHandler.ListMembers)
 		api.POST("/workspaces/:slug/members/leave/", workspaceHandler.Leave)
 		api.GET("/workspaces/:slug/members/:pk/", workspaceHandler.GetMember)

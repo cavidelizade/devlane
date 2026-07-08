@@ -58,6 +58,7 @@ import {
   type AccountSettingsSection,
 } from '../components/settings/sections-config';
 import { SettingsNav } from '../components/settings/SettingsNav';
+import { WorkspaceApiTokensPanel } from '../components/settings/WorkspaceApiTokensPanel';
 import { ExportModal } from '../components/settings/modals/ExportModal';
 import { InviteModal } from '../components/settings/modals/InviteModal';
 import { ProjectStateModal } from '../components/settings/modals/ProjectStateModal';
@@ -3006,6 +3007,10 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {!isAccountTab && !isProjectsTab && section === 'api-tokens' && workspaceSlug && (
+            <WorkspaceApiTokensPanel workspaceSlug={workspaceSlug} />
           )}
 
           {!isAccountTab && !isProjectsTab && section === 'integrations' && workspaceSlug && (
