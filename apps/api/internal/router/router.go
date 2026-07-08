@@ -380,6 +380,7 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/", cycleHandler.ListIssues)
 		api.POST("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/", cycleHandler.AddIssue)
 		api.DELETE("/workspaces/:slug/projects/:projectId/cycles/:cycleId/issues/:issueId/", cycleHandler.RemoveIssue)
+		api.POST("/workspaces/:slug/projects/:projectId/cycles/:cycleId/transfer-issues/", cycleHandler.CompleteCycle)
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/progress/", cycleHandler.Progress)
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/cycle-progress/", cycleHandler.Progress)
 		api.GET("/workspaces/:slug/projects/:projectId/cycles/:cycleId/analytics", cycleHandler.Analytics)

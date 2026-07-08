@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Badge } from '../components/ui';
+import { Badge, Button, Modal } from '../components/ui';
 import { CycleBurndownChart } from '../components/cycles/CycleBurndownChart';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
@@ -59,9 +59,14 @@ export function CycleDetailPage() {
   const [workspace, setWorkspace] = useState<WorkspaceApiResponse | null>(null);
   const [project, setProject] = useState<ProjectApiResponse | null>(null);
   const [cycle, setCycle] = useState<CycleApiResponse | null>(null);
+  const [allCycles, setAllCycles] = useState<CycleApiResponse[]>([]);
   const [issues, setIssues] = useState<IssueApiResponse[]>([]);
   const [states, setStates] = useState<StateApiResponse[]>([]);
   const [progress, setProgress] = useState<CycleProgressResponse | null>(null);
+  const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [transferTargetId, setTransferTargetId] = useState('');
 
   useDocumentTitle(loading ? 'Cycle' : (cycle?.name ?? 'Cycle'));
 
@@ -87,6 +92,7 @@ export function CycleDetailPage() {
         setProject(p ?? null);
         const found = (cycles ?? []).find((c) => cycleMatchesPathSegment(c, cycleId)) ?? null;
         setCycle(found);
+        setAllCycles(cycles ?? []);
         setIssues(allIssues ?? []);
         setStates(st ?? []);
         // Fetch progress separately so it doesn't block the main render.
@@ -124,6 +130,37 @@ export function CycleDetailPage() {
   const stateName = (stateId: string | null | undefined) =>
     stateId ? (states.find((s) => s.id === stateId)?.name ?? '—') : '—';
 
+  // Other cycles this one's incomplete work can be transferred into on completion.
+  const transferTargets = allCycles.filter((c) => c.id !== cycle?.id && c.status !== 'completed');
+
+  const handleComplete = async () => {
+    if (!workspaceSlug || !projectId || !cycle) return;
+    setCompleting(true);
+    setCompleteError(null);
+    try {
+      const res = await cycleService.completeCycle(
+        workspaceSlug,
+        projectId,
+        cycle.id,
+        transferTargetId || undefined,
+      );
+      setCycle(res.cycle);
+      // Some work items may have moved out; refresh the list and the snapshot.
+      const [allIssues, snap] = await Promise.all([
+        issueService.list(workspaceSlug, projectId, { limit: 500 }),
+        cycleService.getProgress(workspaceSlug, projectId, cycle.id),
+      ]);
+      setIssues(allIssues ?? []);
+      setProgress(snap);
+      setCompleteModalOpen(false);
+      setTransferTargetId('');
+    } catch {
+      setCompleteError('Could not complete the cycle. Please try again.');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   if (loading) return <div className="p-6 text-sm text-(--txt-tertiary)">Loading cycle…</div>;
   if (!workspace || !project || !cycle)
     return <div className="p-6 text-sm text-(--txt-secondary)">Cycle not found.</div>;
@@ -135,18 +172,80 @@ export function CycleDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <Link
-          to={`${projectBase}/cycles`}
-          className="inline-flex items-center text-sm text-(--txt-secondary) hover:text-(--txt-primary)"
-        >
-          ← Back to cycles
-        </Link>
-        <h1 className="text-xl font-semibold text-(--txt-primary)">{cycle.name}</h1>
-        <p className="text-sm text-(--txt-secondary)">
-          {formatDate(cycle.start_date)} — {formatDate(cycle.end_date)} · {total} work items
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <Link
+            to={`${projectBase}/cycles`}
+            className="inline-flex items-center text-sm text-(--txt-secondary) hover:text-(--txt-primary)"
+          >
+            ← Back to cycles
+          </Link>
+          <h1 className="text-xl font-semibold text-(--txt-primary)">{cycle.name}</h1>
+          <p className="text-sm text-(--txt-secondary)">
+            {formatDate(cycle.start_date)} — {formatDate(cycle.end_date)} · {total} work items
+          </p>
+        </div>
+        <div className="shrink-0">
+          {cycle.status === 'completed' ? (
+            <Badge variant="neutral">Completed</Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setTransferTargetId('');
+                setCompleteError(null);
+                setCompleteModalOpen(true);
+              }}
+            >
+              Complete cycle
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Modal
+        open={completeModalOpen}
+        onClose={() => !completing && setCompleteModalOpen(false)}
+        title="Complete cycle"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-(--txt-secondary)">
+            Completing <span className="font-medium text-(--txt-primary)">{cycle.name}</span>{' '}
+            records its progress. Optionally move any incomplete work items into another cycle.
+          </p>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">
+              Transfer incomplete work items to
+            </label>
+            <select
+              value={transferTargetId}
+              onChange={(e) => setTransferTargetId(e.target.value)}
+              className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+            >
+              <option value="">Don’t transfer (leave them here)</option>
+              {transferTargets.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {completeError && <p className="text-sm text-(--txt-danger-primary)">{completeError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setCompleteModalOpen(false)}
+              disabled={completing}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleComplete} disabled={completing}>
+              {completing ? 'Completing…' : 'Complete cycle'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Progress stats ── */}
       {progress && (
