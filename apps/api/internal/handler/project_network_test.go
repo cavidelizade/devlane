@@ -68,3 +68,32 @@ func TestProject_NetworkVisibility(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest,
 		ts.PATCH(projectURL, map[string]any{"network": 5}, w.Session).Code)
 }
+
+func projectListCount(t *testing.T, rr *httptest.ResponseRecorder) int {
+	t.Helper()
+	require.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
+	var rows []json.RawMessage
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &rows))
+	return len(rows)
+}
+
+// Creating a project with an out-of-range network is rejected up front and
+// leaves no half-created project behind (Create persists before it can apply
+// network via Update). Covers #197.
+func TestProject_CreateInvalidNetworkNoSideEffect(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	w := testutil.SeedWorld(t, ts.DB)
+
+	listURL := "/api/workspaces/" + w.Workspace.Slug + "/projects/"
+	before := projectListCount(t, ts.GET(listURL, w.Session))
+
+	rr := ts.POST(listURL, map[string]any{
+		"name":       "Bad Network",
+		"identifier": "BADNET",
+		"network":    5,
+	}, w.Session)
+	require.Equal(t, http.StatusBadRequest, rr.Code, "body=%s", rr.Body.String())
+
+	after := projectListCount(t, ts.GET(listURL, w.Session))
+	require.Equal(t, before, after, "invalid create must not leave a project behind")
+}

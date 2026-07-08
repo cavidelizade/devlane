@@ -107,6 +107,13 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
 		return
 	}
+	// Validate network before creating anything: Create persists the project first
+	// and only then applies network via Update, so an invalid value would otherwise
+	// leave behind a default-network project and a client 400 that invites a retry.
+	if body.Network != nil && *body.Network != model.NetworkPublic && *body.Network != model.NetworkSecret {
+		c.JSON(http.StatusBadRequest, gin.H{"error": service.ErrInvalidNetwork.Error()})
+		return
+	}
 	p, err := h.Project.Create(c.Request.Context(), slug, body.Name, body.Identifier, user.ID)
 	if err != nil {
 		if err == service.ErrProjectNotFound || err == service.ErrProjectForbidden {
