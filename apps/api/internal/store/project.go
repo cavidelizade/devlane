@@ -92,6 +92,16 @@ func (s *ProjectStore) GetByWorkspaceAndIdentifier(ctx context.Context, workspac
 }
 
 // IsInWorkspace checks that the project belongs to the workspace.
+// ListWithAutoArchive returns projects that have auto-archive enabled (archive_in > 0).
+func (s *ProjectStore) ListWithAutoArchive(ctx context.Context) ([]model.Project, error) {
+	var list []model.Project
+	err := s.db.WithContext(ctx).Where("archive_in > 0 AND deleted_at IS NULL").Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (s *ProjectStore) IsInWorkspace(ctx context.Context, projectID, workspaceID uuid.UUID) (bool, error) {
 	var count int64
 	err := s.db.WithContext(ctx).Model(&model.Project{}).

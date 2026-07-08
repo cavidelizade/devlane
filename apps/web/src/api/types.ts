@@ -106,6 +106,8 @@ export interface ProjectApiResponse {
   page_view?: boolean;
   intake_view?: boolean;
   is_time_tracking_enabled?: boolean;
+  /** Auto-archive: months of inactivity after which settled items archive (0 = off). */
+  archive_in?: number;
   created_at?: string;
   updated_at?: string;
 }

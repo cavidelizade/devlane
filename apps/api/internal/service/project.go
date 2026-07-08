@@ -19,6 +19,7 @@ var (
 	ErrProjectForbidden         = errors.New("no access to this project")
 	ErrProjectIdentifierTooLong = errors.New("project identifier must be at most 7 characters")
 	ErrInvalidNetwork           = errors.New("network must be public or secret")
+	ErrInvalidArchiveIn         = errors.New("archive_in must be zero or a positive number of months")
 )
 
 // ProjectService handles project business logic.
@@ -134,7 +135,7 @@ func (s *ProjectService) Create(ctx context.Context, workspaceSlug, name, identi
 	return p, nil
 }
 
-func (s *ProjectService) Update(ctx context.Context, workspaceSlug string, projectID uuid.UUID, userID uuid.UUID, name, identifier, description, timezone, coverImage *string, emoji *string, iconProp *model.JSONMap, projectLeadIDSet bool, projectLeadID *uuid.UUID, defaultAssigneeIDSet bool, defaultAssigneeID *uuid.UUID, guestViewAllFeatures *bool, network *int16, moduleView, cycleView, issueViewsView, pageView, intakeView, isTimeTrackingEnabled *bool) (*model.Project, error) {
+func (s *ProjectService) Update(ctx context.Context, workspaceSlug string, projectID uuid.UUID, userID uuid.UUID, name, identifier, description, timezone, coverImage *string, emoji *string, iconProp *model.JSONMap, projectLeadIDSet bool, projectLeadID *uuid.UUID, defaultAssigneeIDSet bool, defaultAssigneeID *uuid.UUID, guestViewAllFeatures *bool, network *int16, moduleView, cycleView, issueViewsView, pageView, intakeView, isTimeTrackingEnabled *bool, archiveIn *int) (*model.Project, error) {
 	p, err := s.GetByID(ctx, workspaceSlug, projectID, userID)
 	if err != nil {
 		return nil, err
@@ -201,6 +202,12 @@ func (s *ProjectService) Update(ctx context.Context, workspaceSlug string, proje
 	}
 	if isTimeTrackingEnabled != nil {
 		p.IsTimeTrackingEnabled = *isTimeTrackingEnabled
+	}
+	if archiveIn != nil {
+		if *archiveIn < 0 {
+			return nil, ErrInvalidArchiveIn
+		}
+		p.ArchiveIn = *archiveIn
 	}
 	if err := s.ps.Update(ctx, p); err != nil {
 		return nil, err

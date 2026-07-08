@@ -232,6 +232,9 @@ export function SettingsPage() {
       setFeaturePages(selectedProject.page_view ?? true);
       setFeatureIntake(selectedProject.intake_view ?? false);
       setFeatureTimeTracking(selectedProject.is_time_tracking_enabled ?? false);
+      const months = selectedProject.archive_in ?? 0;
+      setAutoArchive(months > 0);
+      if (months > 0) setAutoArchiveMonths(months);
     }
   }, [
     selectedProject,
@@ -249,7 +252,30 @@ export function SettingsPage() {
     selectedProject?.page_view,
     selectedProject?.intake_view,
     selectedProject?.is_time_tracking_enabled,
+    selectedProject?.archive_in,
   ]);
+
+  // Persist the auto-archive automation: archive_in is the number of months (0
+  // disables it). Optimistically flips the toggle, then saves.
+  const persistAutoArchive = async (enabled: boolean, months: number) => {
+    if (!workspaceSlug || !selectedProjectId) return;
+    setAutoArchive(enabled);
+    setAutoArchiveMonths(months);
+    setAutoArchiveSaving(true);
+    try {
+      const updated = await projectService.update(workspaceSlug, selectedProjectId, {
+        archive_in: enabled ? months : 0,
+      });
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch {
+      // Revert the toggle to the persisted value on failure.
+      const persisted = selectedProject?.archive_in ?? 0;
+      setAutoArchive(persisted > 0);
+      if (persisted > 0) setAutoArchiveMonths(persisted);
+    } finally {
+      setAutoArchiveSaving(false);
+    }
+  };
 
   const [workspaceName, setWorkspaceName] = useState('');
   const [companySize, setCompanySize] = useState('51-200');
@@ -358,7 +384,9 @@ export function SettingsPage() {
   const [featurePages, setFeaturePages] = useState(true);
   const [featureIntake, setFeatureIntake] = useState(false);
   const [featureTimeTracking, setFeatureTimeTracking] = useState(false);
-  const [autoArchive, setAutoArchive] = useState(true);
+  const [autoArchive, setAutoArchive] = useState(false);
+  const [autoArchiveMonths, setAutoArchiveMonths] = useState(3);
+  const [autoArchiveSaving, setAutoArchiveSaving] = useState(false);
   const [autoClose, setAutoClose] = useState(true);
   const [pendingInvitesExpanded, setPendingInvitesExpanded] = useState(true);
   const [pendingInviteMenuId, setPendingInviteMenuId] = useState<string | null>(null);
@@ -2578,6 +2606,23 @@ export function SettingsPage() {
                       <p className="mt-0.5 text-sm text-(--txt-secondary)">
                         Devlane will auto archive work items that have been completed or canceled.
                       </p>
+                      {autoArchive && (
+                        <label className="mt-2 flex items-center gap-2 text-sm text-(--txt-secondary)">
+                          Archive after
+                          <select
+                            value={autoArchiveMonths}
+                            disabled={autoArchiveSaving}
+                            onChange={(e) => persistAutoArchive(true, Number(e.target.value))}
+                            className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+                          >
+                            <option value={1}>1 month</option>
+                            <option value={3}>3 months</option>
+                            <option value={6}>6 months</option>
+                            <option value={12}>12 months</option>
+                          </select>
+                          of inactivity
+                        </label>
+                      )}
                     </div>
                   </div>
                   <button
@@ -2585,7 +2630,8 @@ export function SettingsPage() {
                     role="switch"
                     aria-checked={autoArchive}
                     aria-labelledby={`auto-archive-toggle-${selectedProjectId ?? 'project'}`}
-                    onClick={() => setAutoArchive(!autoArchive)}
+                    disabled={autoArchiveSaving}
+                    onClick={() => persistAutoArchive(!autoArchive, autoArchiveMonths)}
                     className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${autoArchive ? 'bg-(--brand-default)' : 'bg-(--neutral-400)'}`}
                   >
                     <span

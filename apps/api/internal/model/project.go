@@ -76,6 +76,9 @@ type Project struct {
 	GuestViewAllFeatures  bool           `gorm:"column:guest_view_all_features;default:false" json:"guest_view_all_features"`
 	CoverImage            string         `gorm:"column:cover_image;type:text" json:"cover_image,omitempty"`
 	Timezone              string         `gorm:"default:UTC" json:"timezone"`
+	// ArchiveIn is the number of months after which settled (completed/cancelled)
+	// work items are auto-archived. 0 disables the automation.
+	ArchiveIn int `gorm:"column:archive_in;default:0" json:"archive_in"`
 }
 
 func (Project) TableName() string { return "projects" }
