@@ -37,14 +37,20 @@ Instance administrators can manage workspaces and instance settings from the ins
 
 ## Screenshots
 
-**Board view** — track work items across states with priority, assignee, and due date at a glance.
-![Board view](./assets/screenshots/board.png)
+<p align="center">
+  <img src="./assets/screenshots/board.png" width="720" alt="Board view — work items across states with priority, assignee, and due date at a glance">
+  <br><sub><b>Board</b> — work items across states with priority, assignee, and due date at a glance</sub>
+</p>
 
-**Work items list** — a filterable, sortable list of everything in a project.
-![Work items list](./assets/screenshots/issue-list.png)
+<p align="center">
+  <img src="./assets/screenshots/issue-list.png" width="720" alt="Work items list — a filterable, sortable list of everything in a project">
+  <br><sub><b>Work items list</b> — a filterable, sortable list of everything in a project</sub>
+</p>
 
-**Work item detail** — description, activity feed, comments, and properties side by side.
-![Work item detail](./assets/screenshots/issue-detail.png)
+<p align="center">
+  <img src="./assets/screenshots/issue-detail.png" width="720" alt="Work item detail — description, activity feed, comments, and properties side by side">
+  <br><sub><b>Work item detail</b> — description, activity feed, comments, and properties side by side</sub>
+</p>
 
 ---
 
