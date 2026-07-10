@@ -236,6 +236,9 @@ export function SettingsPage() {
       const months = selectedProject.archive_in ?? 0;
       setAutoArchive(months > 0);
       if (months > 0) setAutoArchiveMonths(months);
+      const closeMonths = selectedProject.close_in ?? 0;
+      setAutoClose(closeMonths > 0);
+      if (closeMonths > 0) setAutoCloseMonths(closeMonths);
     }
   }, [
     selectedProject,
@@ -254,6 +257,7 @@ export function SettingsPage() {
     selectedProject?.intake_view,
     selectedProject?.is_time_tracking_enabled,
     selectedProject?.archive_in,
+    selectedProject?.close_in,
   ]);
 
   // Persist the auto-archive automation: archive_in is the number of months (0
@@ -275,6 +279,28 @@ export function SettingsPage() {
       if (persisted > 0) setAutoArchiveMonths(persisted);
     } finally {
       setAutoArchiveSaving(false);
+    }
+  };
+
+  // Persist the auto-close automation: close_in is the number of months (0
+  // disables it). Optimistically flips the toggle, then saves.
+  const persistAutoClose = async (enabled: boolean, months: number) => {
+    if (!workspaceSlug || !selectedProjectId) return;
+    setAutoClose(enabled);
+    setAutoCloseMonths(months);
+    setAutoCloseSaving(true);
+    try {
+      const updated = await projectService.update(workspaceSlug, selectedProjectId, {
+        close_in: enabled ? months : 0,
+      });
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch {
+      // Revert the toggle to the persisted value on failure.
+      const persisted = selectedProject?.close_in ?? 0;
+      setAutoClose(persisted > 0);
+      if (persisted > 0) setAutoCloseMonths(persisted);
+    } finally {
+      setAutoCloseSaving(false);
     }
   };
 
@@ -388,7 +414,9 @@ export function SettingsPage() {
   const [autoArchive, setAutoArchive] = useState(false);
   const [autoArchiveMonths, setAutoArchiveMonths] = useState(3);
   const [autoArchiveSaving, setAutoArchiveSaving] = useState(false);
-  const [autoClose, setAutoClose] = useState(true);
+  const [autoClose, setAutoClose] = useState(false);
+  const [autoCloseMonths, setAutoCloseMonths] = useState(3);
+  const [autoCloseSaving, setAutoCloseSaving] = useState(false);
   const [pendingInvitesExpanded, setPendingInvitesExpanded] = useState(true);
   const [pendingInviteMenuId, setPendingInviteMenuId] = useState<string | null>(null);
   const pendingInviteMenuRef = useRef<HTMLDivElement>(null);
@@ -2656,6 +2684,23 @@ export function SettingsPage() {
                         Devlane will automatically close work items that haven&apos;t been completed
                         or canceled.
                       </p>
+                      {autoClose && (
+                        <label className="mt-2 flex items-center gap-2 text-sm text-(--txt-secondary)">
+                          Close after
+                          <select
+                            value={autoCloseMonths}
+                            disabled={autoCloseSaving}
+                            onChange={(e) => persistAutoClose(true, Number(e.target.value))}
+                            className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+                          >
+                            <option value={1}>1 month</option>
+                            <option value={3}>3 months</option>
+                            <option value={6}>6 months</option>
+                            <option value={12}>12 months</option>
+                          </select>
+                          of inactivity
+                        </label>
+                      )}
                     </div>
                   </div>
                   <button
@@ -2663,7 +2708,8 @@ export function SettingsPage() {
                     role="switch"
                     aria-checked={autoClose}
                     aria-labelledby={`auto-close-toggle-${selectedProjectId ?? 'project'}`}
-                    onClick={() => setAutoClose(!autoClose)}
+                    disabled={autoCloseSaving}
+                    onClick={() => persistAutoClose(!autoClose, autoCloseMonths)}
                     className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${autoClose ? 'bg-(--brand-default)' : 'bg-(--neutral-400)'}`}
                   >
                     <span

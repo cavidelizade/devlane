@@ -102,6 +102,16 @@ func (s *ProjectStore) ListWithAutoArchive(ctx context.Context) ([]model.Project
 	return list, nil
 }
 
+// ListWithAutoClose returns projects that have auto-close enabled (close_in > 0).
+func (s *ProjectStore) ListWithAutoClose(ctx context.Context) ([]model.Project, error) {
+	var list []model.Project
+	err := s.db.WithContext(ctx).Where("close_in > 0 AND deleted_at IS NULL").Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (s *ProjectStore) IsInWorkspace(ctx context.Context, projectID, workspaceID uuid.UUID) (bool, error) {
 	var count int64
 	err := s.db.WithContext(ctx).Model(&model.Project{}).

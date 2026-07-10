@@ -79,6 +79,9 @@ type Project struct {
 	// ArchiveIn is the number of months after which settled (completed/cancelled)
 	// work items are auto-archived. 0 disables the automation.
 	ArchiveIn int `gorm:"column:archive_in;default:0" json:"archive_in"`
+	// CloseIn is the number of months after which inactive (non-terminal) work
+	// items are auto-closed into the project's cancelled state. 0 disables it.
+	CloseIn int `gorm:"column:close_in;default:0" json:"close_in"`
 }
 
 func (Project) TableName() string { return "projects" }
