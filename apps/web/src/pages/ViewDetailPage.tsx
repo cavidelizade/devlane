@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Badge, Avatar, Button } from '../components/ui';
 import { CreateWorkItemModal } from '../components/CreateWorkItemModal';
 import { ProjectSavedViewActiveFilters } from '../components/project-saved-view/ProjectSavedViewActiveFilters';
 import { useProjectSavedViewDisplay } from '../contexts/ProjectSavedViewDisplayContext';
 import { useWorkspaceViewsState } from '../contexts/WorkspaceViewsStateContext';
+import { useAuth } from '../contexts/AuthContext';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { issueService } from '../services/issueService';
@@ -25,9 +26,17 @@ import type {
   ModuleApiResponse,
 } from '../api/types';
 import type { Priority } from '../types';
-import type { SavedViewDisplayPropertyId, SavedViewOrderBy } from '../lib/projectSavedViewDisplay';
+import type { SavedViewDisplayPropertyId } from '../lib/projectSavedViewDisplay';
+import {
+  savedViewDisplayToRecords,
+  parseSavedViewDisplayFromRecords,
+} from '../lib/projectSavedViewDisplay';
+import { sortIssuesByOrder } from '../lib/issueListGroupAndSort';
 import { getImageUrl } from '../lib/utils';
-import { parseWorkspaceViewFiltersFromSearchParams } from '../types/workspaceViewFilters';
+import {
+  parseWorkspaceViewFiltersFromSearchParams,
+  workspaceViewFiltersToSearchParams,
+} from '../types/workspaceViewFilters';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const priorityVariant: Record<Priority, 'danger' | 'warning' | 'default' | 'neutral'> = {
@@ -45,56 +54,6 @@ const NONE_MODULE_KEY = '__no_module__';
 const NONE_LABEL_KEY = '__no_label__';
 const NONE_ASSIGNEE_KEY = '__no_assignee__';
 const NONE_CREATOR_KEY = '__no_creator__';
-
-const PRIORITY_RANK: Record<string, number> = {
-  urgent: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  none: 4,
-};
-
-function sortIssuesList(list: IssueApiResponse[], orderBy: SavedViewOrderBy): IssueApiResponse[] {
-  const out = [...list];
-  switch (orderBy) {
-    case 'manual':
-      return out.sort((a, b) => {
-        const so = (a.sort_order ?? 0) - (b.sort_order ?? 0);
-        if (so !== 0) return so;
-        const seq = (a.sequence_id ?? 0) - (b.sequence_id ?? 0);
-        if (seq !== 0) return seq;
-        return a.name.localeCompare(b.name);
-      });
-    case 'last_created':
-      return out.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-    case 'last_updated':
-      return out.sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-      );
-    case 'start_date':
-      return out.sort((a, b) => {
-        const as = a.start_date ? new Date(a.start_date).getTime() : Infinity;
-        const bs = b.start_date ? new Date(b.start_date).getTime() : Infinity;
-        return as - bs;
-      });
-    case 'due_date':
-      return out.sort((a, b) => {
-        const ad = a.target_date ? new Date(a.target_date).getTime() : Infinity;
-        const bd = b.target_date ? new Date(b.target_date).getTime() : Infinity;
-        return ad - bd;
-      });
-    case 'priority':
-      return out.sort((a, b) => {
-        const pa = PRIORITY_RANK[a.priority ?? 'none'] ?? 99;
-        const pb = PRIORITY_RANK[b.priority ?? 'none'] ?? 99;
-        return pa - pb;
-      });
-    default:
-      return out;
-  }
-}
 
 function formatShortDate(iso: string | null | undefined): string | null {
   if (!iso?.trim()) return null;
@@ -194,7 +153,8 @@ function pushUniq(arr: string[], id: string) {
 }
 
 export function ViewDetailPage() {
-  const { settings } = useProjectSavedViewDisplay();
+  const { settings, setSettings } = useProjectSavedViewDisplay();
+  const { user } = useAuth();
   const { filters: workspaceViewFilters, setFilters: setWorkspaceViewFilters } =
     useWorkspaceViewsState();
   const { workspaceSlug, projectId, viewId } = useParams<{
@@ -217,6 +177,11 @@ export function ViewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
+  // Seed the display context from the view record once per view id (below), so
+  // re-setting `view` after a save doesn't clobber the current in-memory settings.
+  const seededViewId = useRef<string | null>(null);
 
   useDocumentTitle(loading ? 'View' : (view?.name ?? 'View'));
 
@@ -278,6 +243,24 @@ export function ViewDetailPage() {
     const next = parseWorkspaceViewFiltersFromSearchParams(params);
     setWorkspaceViewFilters(next);
   }, [setWorkspaceViewFilters, view, viewId]);
+
+  // Load persisted display settings (group/order/columns) from the view record,
+  // so a saved view is shared across users and devices rather than device-local.
+  // Seed once per view id; if the view has no stored settings, keep the local
+  // (localStorage/default) settings the display context already provides.
+  useEffect(() => {
+    if (!view) return;
+    if (seededViewId.current === view.id) return;
+    seededViewId.current = view.id;
+    const parsed = parseSavedViewDisplayFromRecords(view.display_filters, view.display_properties);
+    if (parsed) setSettings(parsed);
+  }, [view, setSettings]);
+
+  // Any change to the filters or display settings means there are unsaved edits,
+  // so drop the "Saved" acknowledgement until the next explicit save.
+  useEffect(() => {
+    setSaveState('idle');
+  }, [workspaceViewFilters, settings]);
 
   useEffect(() => {
     if (!workspaceSlug || !projectId) return;
@@ -482,7 +465,9 @@ export function ViewDetailPage() {
 
   const groupedSections: GroupedSections = useMemo(() => {
     const orderBy = settings.orderBy;
-    const sortIn = (arr: IssueApiResponse[]) => sortIssuesList([...arr], orderBy);
+    const orderDirection = settings.orderDirection;
+    const sortIn = (arr: IssueApiResponse[]) =>
+      sortIssuesByOrder([...arr], orderBy, orderDirection);
 
     const groupBy = settings.groupBy;
 
@@ -710,6 +695,7 @@ export function ViewDetailPage() {
     modules,
     settings.groupBy,
     settings.orderBy,
+    settings.orderDirection,
     sortedStates,
     states,
   ]);
@@ -786,6 +772,29 @@ export function ViewDetailPage() {
     }
   };
 
+  // Persist the current filters + display settings back onto the saved view so they
+  // are shared and survive across devices. Only the view's owner may update it.
+  const handleSaveView = async () => {
+    if (!workspaceSlug || !viewId) return;
+    setSaving(true);
+    try {
+      const { displayFilters, displayProperties } = savedViewDisplayToRecords(settings);
+      await viewService.update(workspaceSlug, viewId, {
+        filters: workspaceViewFiltersToSearchParams(workspaceViewFilters),
+        display_filters: displayFilters,
+        display_properties: displayProperties,
+      });
+      // Don't re-set `view` here: the just-saved values already live in
+      // workspaceViewFilters + settings, and replacing `view` would re-run the
+      // filters-sync effect and clear this "Saved" acknowledgement immediately.
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-(--txt-tertiary)">
@@ -855,6 +864,18 @@ export function ViewDetailPage() {
             <p className="mt-0.5 truncate text-xs text-(--txt-secondary)">{view.description}</p>
           ) : null}
         </div>
+        {user && view.owned_by_id === user.id ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {saveState === 'error' ? (
+              <span className="text-xs text-(--txt-danger-primary)">Couldn’t save. Try again.</span>
+            ) : saveState === 'saved' ? (
+              <span className="text-xs text-(--txt-tertiary)">Saved</span>
+            ) : null}
+            <Button size="sm" variant="secondary" onClick={handleSaveView} disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        ) : null}
       </div>
       <ProjectSavedViewActiveFilters
         members={members}

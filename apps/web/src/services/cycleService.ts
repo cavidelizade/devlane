@@ -116,6 +116,23 @@ export const cycleService = {
     );
     return data;
   },
+
+  /**
+   * Complete a cycle: snapshots its progress and marks it completed. When
+   * targetCycleId is given, incomplete work items are moved into that cycle.
+   */
+  async completeCycle(
+    workspaceSlug: string,
+    projectId: string,
+    cycleId: string,
+    targetCycleId?: string | null,
+  ): Promise<{ cycle: CycleApiResponse; transferred_count: number }> {
+    const { data } = await apiClient.post<{ cycle: CycleApiResponse; transferred_count: number }>(
+      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/cycles/${encodeURIComponent(cycleId)}/transfer-issues/`,
+      targetCycleId ? { target_cycle_id: targetCycleId } : {},
+    );
+    return data;
+  },
 };
 
 export interface CycleProgressResponse {

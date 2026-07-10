@@ -66,6 +66,62 @@ func (s *CycleStore) ListCycleIssueIDs(ctx context.Context, cycleID uuid.UUID) (
 	return ids, nil
 }
 
+// TransferIncompleteIssues moves every incomplete work item (state group
+// backlog/unstarted/started, or no state) from the source cycle to the target
+// cycle in a single transaction, and returns how many were moved. Items already
+// in the target keep a single active link; the source link is soft-deleted.
+func (s *CycleStore) TransferIncompleteIssues(ctx context.Context, sourceCycleID uuid.UUID, target *model.Cycle, userID uuid.UUID) (int, error) {
+	var rows []struct {
+		IssueID uuid.UUID `gorm:"column:issue_id"`
+	}
+	err := s.db.WithContext(ctx).Raw(`
+		SELECT ci.issue_id
+		FROM cycle_issues ci
+		JOIN issues i ON i.id = ci.issue_id AND i.deleted_at IS NULL
+		LEFT JOIN states st ON st.id = i.state_id
+		WHERE ci.cycle_id = ? AND ci.deleted_at IS NULL
+		  AND COALESCE(st.group, 'backlog') IN ('backlog', 'unstarted', 'started')
+	`, sourceCycleID).Scan(&rows).Error
+	if err != nil {
+		return 0, err
+	}
+
+	moved := 0
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, r := range rows {
+			if err := tx.Where("cycle_id = ? AND issue_id = ?", sourceCycleID, r.IssueID).
+				Delete(&model.CycleIssue{}).Error; err != nil {
+				return err
+			}
+			var existing int64
+			if err := tx.Model(&model.CycleIssue{}).
+				Where("cycle_id = ? AND issue_id = ? AND deleted_at IS NULL", target.ID, r.IssueID).
+				Count(&existing).Error; err != nil {
+				return err
+			}
+			if existing == 0 {
+				cb := userID
+				ci := &model.CycleIssue{
+					CycleID:     target.ID,
+					IssueID:     r.IssueID,
+					ProjectID:   target.ProjectID,
+					WorkspaceID: target.WorkspaceID,
+					CreatedByID: &cb,
+				}
+				if err := tx.Create(ci).Error; err != nil {
+					return err
+				}
+			}
+			moved++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return moved, nil
+}
+
 func (s *CycleStore) CountIssuesByCycleIDs(ctx context.Context, cycleIDs []uuid.UUID) (map[uuid.UUID]int, error) {
 	out := make(map[uuid.UUID]int)
 	if len(cycleIDs) == 0 {
