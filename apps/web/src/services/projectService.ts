@@ -69,6 +69,8 @@ export const projectService = {
       page_view?: boolean;
       intake_view?: boolean;
       is_time_tracking_enabled?: boolean;
+      /** Auto-archive: months of inactivity after which settled items archive (0 = off). */
+      archive_in?: number;
     },
   ): Promise<ProjectApiResponse> {
     const { data } = await apiClient.patch<ProjectApiResponse>(
