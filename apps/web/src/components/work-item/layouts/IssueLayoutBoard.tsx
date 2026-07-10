@@ -18,7 +18,10 @@ import {
 import { DatePickerTrigger } from '../DatePickerTrigger';
 import { isOverdue, membersFromAssigneeIds } from '../../../lib/issueRowHelpers';
 import type { GroupedIssuesResult } from '../../../lib/issueListGroupAndSort';
-import type { SavedViewDisplayPropertyId } from '../../../lib/projectSavedViewDisplay';
+import type {
+  SavedViewDisplayPropertyId,
+  SavedViewGroupBy,
+} from '../../../lib/projectSavedViewDisplay';
 import type {
   IssueApiResponse,
   LabelApiResponse,
@@ -36,6 +39,7 @@ import {
 interface IssueLayoutBoardProps extends IssueLayoutProps {
   groupedIssues?: GroupedIssuesResult;
   hasCol?: (key: SavedViewDisplayPropertyId) => boolean;
+  groupBy?: SavedViewGroupBy;
   showEmptyGroups?: boolean;
   subWorkCountByParentId?: Map<string, number>;
   cycleName?: (issue: IssueApiResponse) => string;
@@ -44,13 +48,6 @@ interface IssueLayoutBoardProps extends IssueLayoutProps {
 
 const defaultHasCol = () => true;
 
-/**
- * Kanban board grouped by state. One column per state, ordered by `sequence`,
- * cards reuse the same cells the list rows use.
- *
- * Issues with no state_id (or whose state was deleted) bucket into a synthetic
- * "No state" column at the end.
- */
 export function IssueLayoutBoard({
   project,
   states,
@@ -63,6 +60,7 @@ export function IssueLayoutBoard({
   projectsById,
   groupedIssues,
   hasCol: hasColProp,
+  groupBy,
   showEmptyGroups = false,
   subWorkCountByParentId,
   cycleName,
@@ -112,11 +110,10 @@ export function IssueLayoutBoard({
       const columns = groupedIssues.order
         .map((key) => {
           const items = groupedIssues.groups.get(key) ?? [];
-          const state = stateById.get(key);
           return {
             key,
             title: groupedIssues.isFlat ? 'All work items' : groupedIssues.title(key),
-            color: state?.color ?? undefined,
+            color: stateById.get(key)?.color ?? labelById.get(key)?.color ?? undefined,
             items,
           };
         })
@@ -169,10 +166,10 @@ export function IssueLayoutBoard({
       items: buckets.get(s.id) ?? [],
     }));
     return { columns, orphans };
-  }, [groupByStateGroup, states, issues, stateById, groupedIssues, showEmptyGroups]);
-  const dndEnabled = Boolean(
-    onCardMove && columns.some((column) => groupByStateGroup || stateById.has(column.key)),
-  );
+  }, [groupedIssues, groupByStateGroup, states, issues, stateById, labelById, showEmptyGroups]);
+
+  const dndEnabled =
+    Boolean(onCardMove) && (groupByStateGroup || !groupedIssues || groupBy === 'states');
 
   const renderCard = (issue: IssueApiResponse) => (
     <BoardCard
