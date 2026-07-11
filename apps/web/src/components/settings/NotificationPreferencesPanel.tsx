@@ -106,13 +106,14 @@ export function NotificationPreferencesPanel({
   const toggle = async (key: InAppKey | EmailKey) => {
     if (!prefs) return;
     const next = !prefs[key];
-    const prev = prefs;
-    setPrefs({ ...prefs, [key]: next });
+    // Update only this key via a functional update so a concurrent toggle of a
+    // different switch is never stomped by this one's success or failure.
+    setPrefs((cur) => (cur ? { ...cur, [key]: next } : cur));
     try {
       const saved = await save({ [key]: next });
-      setPrefs(saved);
+      setPrefs((cur) => (cur ? { ...cur, [key]: saved[key] } : cur));
     } catch {
-      setPrefs(prev);
+      setPrefs((cur) => (cur ? { ...cur, [key]: !next } : cur));
     }
   };
 

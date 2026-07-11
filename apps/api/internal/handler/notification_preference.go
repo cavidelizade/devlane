@@ -89,13 +89,19 @@ type NotificationPreferenceHandler struct {
 // (resolved) preference so unspecified fields inherit from the parent scope,
 // or the all-enabled default when nothing is stored. The ID is cleared so the
 // upsert writes a fresh row at the target scope rather than reusing a parent's.
-func (h *NotificationPreferenceHandler) baseForScope(c *gin.Context, userID uuid.UUID, workspaceID, projectID *uuid.UUID) model.UserNotificationPreference {
-	if p, err := h.Prefs.Resolve(c.Request.Context(), userID, workspaceID, projectID); err == nil && p != nil {
+// A Resolve error is returned rather than swallowed, so a transient failure
+// can't silently reset inherited (disabled) fields to the all-true default.
+func (h *NotificationPreferenceHandler) baseForScope(c *gin.Context, userID uuid.UUID, workspaceID, projectID *uuid.UUID) (model.UserNotificationPreference, error) {
+	p, err := h.Prefs.Resolve(c.Request.Context(), userID, workspaceID, projectID)
+	if err != nil {
+		return model.UserNotificationPreference{}, err
+	}
+	if p != nil {
 		b := *p
 		b.ID = uuid.Nil
-		return b
+		return b, nil
 	}
-	return model.DefaultNotificationPreference()
+	return model.DefaultNotificationPreference(), nil
 }
 
 // GetWorkspace returns the effective notification preferences for the caller in
@@ -131,7 +137,11 @@ func (h *NotificationPreferenceHandler) UpdateWorkspace(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
 		return
 	}
-	p := h.baseForScope(c, user.ID, &wrk.ID, nil)
+	p, err := h.baseForScope(c, user.ID, &wrk.ID, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load preferences"})
+		return
+	}
 	p.UserID = user.ID
 	p.WorkspaceID = &wrk.ID
 	p.ProjectID = nil
@@ -176,7 +186,11 @@ func (h *NotificationPreferenceHandler) UpdateProject(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "detail": err.Error()})
 		return
 	}
-	p := h.baseForScope(c, user.ID, &proj.WorkspaceID, &proj.ID)
+	p, err := h.baseForScope(c, user.ID, &proj.WorkspaceID, &proj.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load preferences"})
+		return
+	}
 	p.UserID = user.ID
 	p.WorkspaceID = &proj.WorkspaceID
 	p.ProjectID = &proj.ID
