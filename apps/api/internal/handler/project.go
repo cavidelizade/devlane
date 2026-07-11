@@ -224,6 +224,7 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 			body.IntakeView,
 			body.IsTimeTrackingEnabled,
 			nil, // archive_in: set via project settings, not on create
+			nil, // close_in: set via project settings, not on create
 		)
 		if err != nil {
 			if err == service.ErrInvalidNetwork {
@@ -273,6 +274,7 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 		IntakeView            *bool                  `json:"intake_view"`
 		IsTimeTrackingEnabled *bool                  `json:"is_time_tracking_enabled"`
 		ArchiveIn             *int                   `json:"archive_in"`
+		CloseIn               *int                   `json:"close_in"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "detail": err.Error()})
@@ -330,13 +332,13 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 			defaultAssigneeIDPtr = &id
 		}
 	}
-	p, err := h.Project.Update(c.Request.Context(), slug, projectID, user.ID, name, identifier, description, timezone, coverImage, body.Emoji, iconProp, body.ProjectLeadID != nil, projectLeadIDPtr, body.DefaultAssigneeID != nil, defaultAssigneeIDPtr, body.GuestViewAllFeatures, body.Network, body.ModuleView, body.CycleView, body.IssueViewsView, body.PageView, body.IntakeView, body.IsTimeTrackingEnabled, body.ArchiveIn)
+	p, err := h.Project.Update(c.Request.Context(), slug, projectID, user.ID, name, identifier, description, timezone, coverImage, body.Emoji, iconProp, body.ProjectLeadID != nil, projectLeadIDPtr, body.DefaultAssigneeID != nil, defaultAssigneeIDPtr, body.GuestViewAllFeatures, body.Network, body.ModuleView, body.CycleView, body.IssueViewsView, body.PageView, body.IntakeView, body.IsTimeTrackingEnabled, body.ArchiveIn, body.CloseIn)
 	if err != nil {
 		if err == service.ErrProjectNotFound || err == service.ErrProjectForbidden {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
 			return
 		}
-		if err == service.ErrProjectIdentifierTooLong || err == service.ErrInvalidNetwork || err == service.ErrInvalidArchiveIn {
+		if err == service.ErrProjectIdentifierTooLong || err == service.ErrInvalidNetwork || err == service.ErrInvalidArchiveIn || err == service.ErrInvalidCloseIn {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

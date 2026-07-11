@@ -71,6 +71,8 @@ export const projectService = {
       is_time_tracking_enabled?: boolean;
       /** Auto-archive: months of inactivity after which settled items archive (0 = off). */
       archive_in?: number;
+      /** Auto-close: months of inactivity after which active items are closed (0 = off). */
+      close_in?: number;
     },
   ): Promise<ProjectApiResponse> {
     const { data } = await apiClient.patch<ProjectApiResponse>(
