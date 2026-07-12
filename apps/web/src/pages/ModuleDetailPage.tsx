@@ -10,6 +10,7 @@ import { issueService } from '../services/issueService';
 import { stateService } from '../services/stateService';
 import { labelService } from '../services/labelService';
 import { cycleService } from '../services/cycleService';
+import { estimateService } from '../services/estimateService';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -19,6 +20,7 @@ import type {
   LabelApiResponse,
   WorkspaceMemberApiResponse,
   CycleApiResponse,
+  EstimateApiResponse,
 } from '../api/types';
 import type { Priority } from '../types';
 import type { SavedViewDisplayPropertyId } from '../lib/projectSavedViewDisplay';
@@ -191,6 +193,7 @@ export function ModuleDetailPage() {
   const [states, setStates] = useState<StateApiResponse[]>([]);
   const [labels, setLabels] = useState<LabelApiResponse[]>([]);
   const [cycles, setCycles] = useState<CycleApiResponse[]>([]);
+  const [estimates, setEstimates] = useState<EstimateApiResponse[]>([]);
   const [projectModules, setProjectModules] = useState<ModuleApiResponse[]>([]);
   const [members, setMembers] = useState<WorkspaceMemberApiResponse[]>([]);
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
@@ -292,12 +295,14 @@ export function ModuleDetailPage() {
       cycleService.list(workspaceSlug, projectId),
       workspaceService.listMembers(workspaceSlug),
       projectService.list(workspaceSlug),
+      estimateService.list(workspaceSlug, projectId),
     ])
-      .then(([w, p, mods, iss, st, lab, cyc, mem, proj]) => {
+      .then(([w, p, mods, iss, st, lab, cyc, mem, proj, est]) => {
         if (cancelled) return;
         setWorkspace(w ?? null);
         setProject(p ?? null);
         setProjectModules(mods ?? []);
+        setEstimates(est ?? []);
         const key = moduleId.trim().toLowerCase();
         const found =
           (mods ?? []).find((x) => x.id === moduleId) ??
@@ -325,6 +330,7 @@ export function ModuleDetailPage() {
           setCycles([]);
           setMembers([]);
           setProjects([]);
+          setEstimates([]);
         }
       })
       .finally(() => {
@@ -487,6 +493,13 @@ export function ModuleDetailPage() {
     return id ? (projectModules.find((m) => m.id === id)?.name ?? '—') : '—';
   };
 
+  const estimateValue = (issue: IssueApiResponse) => {
+    if (!issue.estimate_point_id) return '—';
+    return (
+      estimates.flatMap((e) => e.points).find((p) => p.id === issue.estimate_point_id)?.value ?? '—'
+    );
+  };
+
   const dp = listDisplay.displayProperties;
   const hasCol = (id: SavedViewDisplayPropertyId) => dp.has(id);
 
@@ -602,7 +615,12 @@ export function ModuleDetailPage() {
               </span>
             ) : null}
             {hasCol('estimate') ? (
-              <span className="text-[11px] text-(--txt-secondary)">—</span>
+              <span
+                className="min-w-6 text-center text-[11px] text-(--txt-secondary)"
+                title="Estimate"
+              >
+                {estimateValue(issue)}
+              </span>
             ) : null}
             {hasCol('module') ? (
               <span

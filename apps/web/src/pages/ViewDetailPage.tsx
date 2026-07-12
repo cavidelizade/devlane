@@ -13,6 +13,7 @@ import { stateService } from '../services/stateService';
 import { labelService } from '../services/labelService';
 import { cycleService } from '../services/cycleService';
 import { moduleService } from '../services/moduleService';
+import { estimateService } from '../services/estimateService';
 import { viewService } from '../services/viewService';
 import type {
   IssueApiResponse,
@@ -24,6 +25,7 @@ import type {
   WorkspaceMemberApiResponse,
   CycleApiResponse,
   ModuleApiResponse,
+  EstimateApiResponse,
 } from '../api/types';
 import type { Priority } from '../types';
 import type { SavedViewDisplayPropertyId } from '../lib/projectSavedViewDisplay';
@@ -174,6 +176,7 @@ export function ViewDetailPage() {
   const [members, setMembers] = useState<WorkspaceMemberApiResponse[]>([]);
   const [cycles, setCycles] = useState<CycleApiResponse[]>([]);
   const [modules, setModules] = useState<ModuleApiResponse[]>([]);
+  const [estimates, setEstimates] = useState<EstimateApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -276,8 +279,9 @@ export function ViewDetailPage() {
       workspaceService.listMembers(workspaceSlug),
       cycleService.list(workspaceSlug, projectId),
       moduleService.list(workspaceSlug, projectId),
+      estimateService.list(workspaceSlug, projectId),
     ])
-      .then(([w, p, list, iss, st, lab, mem, cy, mod]) => {
+      .then(([w, p, list, iss, st, lab, mem, cy, mod, est]) => {
         if (cancelled) return;
         setWorkspace(w);
         setProject(p);
@@ -288,6 +292,7 @@ export function ViewDetailPage() {
         setMembers(mem ?? []);
         setCycles(cy ?? []);
         setModules(mod ?? []);
+        setEstimates(est ?? []);
       })
       .catch(() => {
         if (!cancelled) {
@@ -300,6 +305,7 @@ export function ViewDetailPage() {
           setMembers([]);
           setCycles([]);
           setModules([]);
+          setEstimates([]);
         }
       })
       .finally(() => {
@@ -848,6 +854,13 @@ export function ViewDetailPage() {
     return id ? (modules.find((m) => m.id === id)?.name ?? '—') : '—';
   };
 
+  const estimateValue = (issue: IssueApiResponse) => {
+    if (!issue.estimate_point_id) return '—';
+    return (
+      estimates.flatMap((e) => e.points).find((p) => p.id === issue.estimate_point_id)?.value ?? '—'
+    );
+  };
+
   const totalIssueCount = groupedSections.order.reduce(
     (n, key) => n + (groupedSections.groups.get(key)?.length ?? 0),
     0,
@@ -1022,7 +1035,12 @@ export function ViewDetailPage() {
                                 </span>
                               ) : null}
                               {hasCol('estimate') ? (
-                                <span className="text-[11px] text-(--txt-secondary)">—</span>
+                                <span
+                                  className="min-w-6 text-center text-[11px] text-(--txt-secondary)"
+                                  title="Estimate"
+                                >
+                                  {estimateValue(issue)}
+                                </span>
                               ) : null}
                               {hasCol('module') ? (
                                 <span
