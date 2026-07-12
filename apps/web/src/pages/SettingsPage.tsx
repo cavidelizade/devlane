@@ -6,6 +6,7 @@ import { IntegrationsSection } from '../components/integrations/IntegrationsSect
 import { ProjectEstimatesSettings } from '../components/settings/ProjectEstimatesSettings';
 import { NotificationPreferencesPanel } from '../components/settings/NotificationPreferencesPanel';
 import { notificationPreferenceService } from '../services/notificationPreferenceService';
+import { accountService } from '../services/accountService';
 import { UploadImageModal } from '../components/UploadImageModal';
 import { ProjectIconModal, ProjectIconDisplay } from '../components/ProjectIconModal';
 import { getImageUrl } from '../lib/utils';
@@ -76,7 +77,7 @@ export function SettingsPage() {
   }>();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, setUserFromApi } = useAuth();
+  const { user, setUserFromApi, logout, refreshUser } = useAuth();
   const [workspace, setWorkspace] = useState<WorkspaceApiResponse | null>(null);
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberApiResponse[]>([]);
@@ -354,6 +355,88 @@ export function SettingsPage() {
   const [displayName, setDisplayName] = useState(user?.name?.split(' ')[0]?.toLowerCase() ?? '');
   const [profileEmail, setProfileEmail] = useState(user?.email ?? '');
   const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
+  const [deactivateBusy, setDeactivateBusy] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  // Email-change flow: 'idle' (show Change), 'request' (enter new email),
+  // 'verify' (enter the emailed code).
+  const [emailChangeStep, setEmailChangeStep] = useState<'idle' | 'request' | 'verify'>('idle');
+  const [emailChangeNew, setEmailChangeNew] = useState('');
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState<string | null>(null);
+  const [emailChangeBusy, setEmailChangeBusy] = useState(false);
+
+  const apiErrorMessage = (e: unknown, fallback: string): string => {
+    if (
+      e &&
+      typeof e === 'object' &&
+      'response' in e &&
+      typeof (e as { response?: { data?: { error?: string } } }).response?.data?.error === 'string'
+    ) {
+      return (e as { response: { data: { error: string } } }).response.data.error;
+    }
+    return fallback;
+  };
+
+  // Bumped whenever the email-change flow is reset/cancelled; in-flight requests
+  // captured an earlier value and bail out instead of resurrecting the panel.
+  const emailFlowToken = useRef(0);
+
+  const resetEmailChange = () => {
+    emailFlowToken.current += 1;
+    setEmailChangeStep('idle');
+    setEmailChangeNew('');
+    setEmailChangeCode('');
+    setEmailChangeError(null);
+    setEmailChangeBusy(false);
+  };
+
+  const requestEmailChange = async () => {
+    const token = emailFlowToken.current;
+    setEmailChangeError(null);
+    setEmailChangeBusy(true);
+    try {
+      await accountService.requestEmailChange(emailChangeNew.trim());
+      if (emailFlowToken.current !== token) return;
+      setEmailChangeStep('verify');
+    } catch (e: unknown) {
+      if (emailFlowToken.current !== token) return;
+      setEmailChangeError(apiErrorMessage(e, 'Failed to send the confirmation code'));
+    } finally {
+      if (emailFlowToken.current === token) setEmailChangeBusy(false);
+    }
+  };
+
+  const verifyEmailChange = async () => {
+    const token = emailFlowToken.current;
+    setEmailChangeError(null);
+    setEmailChangeBusy(true);
+    try {
+      const updated = await accountService.verifyEmailChange(emailChangeCode.trim());
+      if (emailFlowToken.current !== token) return;
+      setProfileEmail(updated);
+      await refreshUser();
+      if (emailFlowToken.current !== token) return;
+      resetEmailChange();
+    } catch (e: unknown) {
+      if (emailFlowToken.current !== token) return;
+      setEmailChangeError(apiErrorMessage(e, 'Failed to confirm the new email'));
+    } finally {
+      if (emailFlowToken.current === token) setEmailChangeBusy(false);
+    }
+  };
+
+  const deactivateAccount = async () => {
+    setDeactivateError(null);
+    setDeactivateBusy(true);
+    try {
+      await accountService.deactivate();
+      await logout();
+    } catch (e: unknown) {
+      setDeactivateError(apiErrorMessage(e, 'Failed to deactivate account. Please try again.'));
+      setDeactivateBusy(false);
+    }
+  };
   const { theme, setTheme } = useTheme();
   const [firstDayOfWeek, setFirstDayOfWeek] = useState('monday');
   const [timezone, setTimezone] = useState('UTC');
@@ -876,13 +959,83 @@ export function SettingsPage() {
                   <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">
                     Email <span className="text-(--txt-danger-primary)">*</span>
                   </label>
-                  <input
-                    type="email"
-                    value={profileEmail}
-                    readOnly
-                    disabled
-                    className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-layer-2) px-3 py-2 text-sm text-(--txt-tertiary) cursor-not-allowed"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={profileEmail}
+                      readOnly
+                      disabled
+                      className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-layer-2) px-3 py-2 text-sm text-(--txt-tertiary) cursor-not-allowed"
+                    />
+                    {emailChangeStep === 'idle' && (
+                      <Button
+                        variant="secondary"
+                        className="shrink-0"
+                        onClick={() => {
+                          setEmailChangeError(null);
+                          setEmailChangeNew('');
+                          setEmailChangeStep('request');
+                        }}
+                      >
+                        Change
+                      </Button>
+                    )}
+                  </div>
+                  {emailChangeStep === 'request' && (
+                    <div className="mt-2 space-y-2 rounded-(--radius-md) border border-(--border-subtle) p-3">
+                      <p className="text-sm text-(--txt-secondary)">
+                        Enter your new email. We&apos;ll send a confirmation code to it.
+                      </p>
+                      <input
+                        type="email"
+                        value={emailChangeNew}
+                        onChange={(e) => setEmailChangeNew(e.target.value)}
+                        placeholder="new@email.com"
+                        className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          disabled={emailChangeBusy || !emailChangeNew.trim()}
+                          onClick={requestEmailChange}
+                        >
+                          {emailChangeBusy ? 'Sending…' : 'Send code'}
+                        </Button>
+                        <Button variant="secondary" onClick={resetEmailChange}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {emailChangeStep === 'verify' && (
+                    <div className="mt-2 space-y-2 rounded-(--radius-md) border border-(--border-subtle) p-3">
+                      <p className="text-sm text-(--txt-secondary)">
+                        Enter the code we sent to{' '}
+                        <span className="text-(--txt-primary)">{emailChangeNew.trim()}</span>.
+                      </p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={emailChangeCode}
+                        onChange={(e) => setEmailChangeCode(e.target.value)}
+                        placeholder="6-digit code"
+                        className="w-full rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-3 py-2 text-sm text-(--txt-primary) focus:outline-none focus:border-(--border-strong)"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          disabled={emailChangeBusy || !emailChangeCode.trim()}
+                          onClick={verifyEmailChange}
+                        >
+                          {emailChangeBusy ? 'Confirming…' : 'Confirm email'}
+                        </Button>
+                        <Button variant="secondary" onClick={resetEmailChange}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {emailChangeError && (
+                    <p className="mt-1 text-sm text-(--txt-danger-primary)">{emailChangeError}</p>
+                  )}
                 </div>
               </div>
               {profileError && (
@@ -935,14 +1088,58 @@ export function SettingsPage() {
                 {deactivateOpen && (
                   <CardContent className="border-t border-(--border-subtle) pt-3">
                     <p className="text-sm text-(--txt-secondary)">
-                      This action cannot be undone. Your account will be deactivated.
+                      This deactivates your account and signs you out everywhere. Reactivating it
+                      requires an administrator.
                     </p>
-                    <Button variant="secondary" className="mt-3 text-(--txt-danger-primary)">
-                      Deactivate account
+                    <Button
+                      variant="secondary"
+                      className="mt-3 text-(--txt-danger-primary)"
+                      disabled={deactivateBusy}
+                      onClick={() => setDeactivateConfirmOpen(true)}
+                    >
+                      {deactivateBusy ? 'Deactivating…' : 'Deactivate account'}
                     </Button>
                   </CardContent>
                 )}
               </Card>
+              <Modal
+                open={deactivateConfirmOpen}
+                onClose={() => {
+                  if (deactivateBusy) return;
+                  setDeactivateError(null);
+                  setDeactivateConfirmOpen(false);
+                }}
+                title="Deactivate account?"
+              >
+                <div className="space-y-4">
+                  <p className="text-sm text-(--txt-secondary)">
+                    You&apos;ll be signed out everywhere and won&apos;t be able to sign back in.
+                    Reactivating your account requires an administrator.
+                  </p>
+                  {deactivateError && (
+                    <p className="text-sm text-(--txt-danger-primary)">{deactivateError}</p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={deactivateBusy}
+                      onClick={() => {
+                        setDeactivateError(null);
+                        setDeactivateConfirmOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="text-(--txt-danger-primary)"
+                      disabled={deactivateBusy}
+                      onClick={() => void deactivateAccount()}
+                    >
+                      {deactivateBusy ? 'Deactivating…' : 'Deactivate'}
+                    </Button>
+                  </div>
+                </div>
+              </Modal>
               <CoverImageModal
                 open={accountCoverModalOpen}
                 onClose={() => setAccountCoverModalOpen(false)}
