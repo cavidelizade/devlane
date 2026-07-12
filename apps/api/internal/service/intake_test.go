@@ -150,3 +150,22 @@ func TestIntake_DeclineAndDuplicate(t *testing.T) {
 	require.NotNil(t, dup[0].DuplicateToID)
 	require.Equal(t, target.ID, *dup[0].DuplicateToID)
 }
+
+// A duplicate target that isn't a work item in this project is rejected.
+func TestIntake_MarkDuplicate_RejectsForeignTarget(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	w := testutil.SeedWorld(t, ts.DB)
+	svc := newIntakeSvc(ts.DB)
+	ctx := context.Background()
+	d := makeDraft(t, ts.DB, w)
+	items, _ := svc.List(ctx, w.Workspace.Slug, w.Project.ID, w.User.ID, nil)
+	it := itemForIssue(t, items, d.ID)
+
+	// A work item that lives in a different project.
+	otherProject := testutil.CreateProject(t, ts.DB, w.Workspace.ID, w.User.ID)
+	foreign := testutil.CreateIssue(t, ts.DB, otherProject.ID, w.Workspace.ID, w.User.ID)
+
+	require.ErrorIs(t,
+		svc.MarkDuplicate(ctx, w.Workspace.Slug, w.Project.ID, it.ID, w.User.ID, foreign.ID),
+		service.ErrIntakeBadDuplicate)
+}

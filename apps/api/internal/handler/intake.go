@@ -140,7 +140,7 @@ func (h *IntakeHandler) intakeError(c *gin.Context, err error) {
 	switch err {
 	case service.ErrProjectForbidden, service.ErrProjectNotFound, service.ErrIntakeNotFound:
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
-	case service.ErrIntakeNeedSnooze, service.ErrIntakeNeedDup:
+	case service.ErrIntakeNeedSnooze, service.ErrIntakeNeedDup, service.ErrIntakeBadDuplicate:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Intake request failed"})

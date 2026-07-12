@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	ErrIntakeNotFound   = errors.New("intake item not found")
-	ErrIntakeNeedSnooze = errors.New("snooze requires a future date")
-	ErrIntakeNeedDup    = errors.New("duplicate requires a target work item")
+	ErrIntakeNotFound     = errors.New("intake item not found")
+	ErrIntakeNeedSnooze   = errors.New("snooze requires a future date")
+	ErrIntakeNeedDup      = errors.New("duplicate requires a target work item")
+	ErrIntakeBadDuplicate = errors.New("duplicate target must be a work item in this project")
 )
 
 // IntakeItem is an intake_issues row plus the summary of its work item, as
@@ -134,14 +135,19 @@ func (s *IntakeService) PendingCount(ctx context.Context, workspaceSlug string, 
 }
 
 // Accept promotes an intake item into an active work item: it clears the draft
-// flag and marks the item accepted.
+// flag and marks the item accepted, atomically so the two tables can't disagree.
 func (s *IntakeService) Accept(ctx context.Context, workspaceSlug string, projectID, itemID, userID uuid.UUID) error {
-	return s.transition(ctx, workspaceSlug, projectID, itemID, userID, func(it *model.IntakeIssue) (map[string]any, error) {
-		if err := s.issues.UpdateFields(ctx, it.IssueID, map[string]any{"is_draft": false}); err != nil {
-			return nil, err
-		}
-		return map[string]any{"status": model.IntakeStatusAccepted, "snoozed_till": nil, "updated_by_id": userID}, nil
-	})
+	if _, err := s.ensureProjectAccess(ctx, workspaceSlug, projectID, userID); err != nil {
+		return err
+	}
+	it, err := s.intake.GetByID(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	if it == nil || it.ProjectID != projectID {
+		return ErrIntakeNotFound
+	}
+	return s.intake.AcceptTx(ctx, it.ID, it.IssueID, userID)
 }
 
 // Decline removes an item from the queue without deleting the work item; it
@@ -162,10 +168,16 @@ func (s *IntakeService) Snooze(ctx context.Context, workspaceSlug string, projec
 	})
 }
 
-// MarkDuplicate marks an item as a duplicate of another work item.
+// MarkDuplicate marks an item as a duplicate of another work item in the same
+// project. The target is validated so duplicate_to_id can't point at a missing
+// or cross-project issue.
 func (s *IntakeService) MarkDuplicate(ctx context.Context, workspaceSlug string, projectID, itemID, userID, duplicateOf uuid.UUID) error {
 	if duplicateOf == uuid.Nil {
 		return ErrIntakeNeedDup
+	}
+	target, err := s.issues.GetByID(ctx, duplicateOf)
+	if err != nil || target == nil || target.ProjectID != projectID {
+		return ErrIntakeBadDuplicate
 	}
 	return s.transition(ctx, workspaceSlug, projectID, itemID, userID, func(it *model.IntakeIssue) (map[string]any, error) {
 		return map[string]any{"status": model.IntakeStatusDuplicate, "duplicate_to_id": duplicateOf, "snoozed_till": nil, "updated_by_id": userID}, nil

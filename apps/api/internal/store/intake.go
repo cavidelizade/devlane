@@ -36,10 +36,37 @@ func (s *IntakeStore) GetOrCreateDefault(ctx context.Context, projectID, workspa
 		CreatedByID: userID,
 		UpdatedByID: userID,
 	}
-	if err := s.db.WithContext(ctx).Create(&in).Error; err != nil {
-		return nil, err
+	if cerr := s.db.WithContext(ctx).Create(&in).Error; cerr != nil {
+		// A concurrent caller won the unique default-intake index; re-read the
+		// row it created rather than returning the conflict error.
+		var existing model.Intake
+		if rerr := s.db.WithContext(ctx).
+			Where("project_id = ? AND is_default = TRUE AND deleted_at IS NULL", projectID).
+			First(&existing).Error; rerr == nil {
+			return &existing, nil
+		}
+		return nil, cerr
 	}
 	return &in, nil
+}
+
+// AcceptTx atomically clears the work item's draft flag and marks the intake
+// item accepted, so the two tables never disagree on a half-applied accept.
+func (s *IntakeStore) AcceptTx(ctx context.Context, itemID, issueID, userID uuid.UUID) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.Issue{}).
+			Where("id = ?", issueID).
+			UpdateColumn("is_draft", false).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.IntakeIssue{}).
+			Where("id = ?", itemID).
+			Updates(map[string]any{
+				"status":        model.IntakeStatusAccepted,
+				"snoozed_till":  nil,
+				"updated_by_id": userID,
+			}).Error
+	})
 }
 
 // BackfillDraftIssues creates a pending intake_issues row for every draft issue
