@@ -102,6 +102,7 @@ func New(cfg Config) *gin.Engine {
 	authSvc := auth.NewService(userStore, sessionStore, passwordResetTokenStore)
 	authSvc.SetAccountStore(accountStore)
 	authSvc.SetApiTokenStore(apiTokenStore)
+	accountSvc := service.NewAccountService(userStore, sessionStore, store.NewEmailChangeRequestStore(cfg.DB), cfg.MagicCodeSecret)
 	appBaseURL := cfg.AppBaseURL
 	if appBaseURL == "" {
 		appBaseURL = cfg.CORSAllowOrigin
@@ -109,6 +110,7 @@ func New(cfg Config) *gin.Engine {
 
 	authHandler := &handler.AuthHandler{
 		Auth:              authSvc,
+		Account:           accountSvc,
 		Settings:          instanceSettingStore,
 		Winv:              workspaceInviteStore,
 		Ws:                workspaceStore,
@@ -266,6 +268,9 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/users/me/set-password/", authHandler.SetPassword)
 		api.GET("/users/me/notification-preferences/", authHandler.GetNotificationPreferences)
 		api.PUT("/users/me/notification-preferences/", authHandler.UpdateNotificationPreferences)
+		api.POST("/users/me/deactivate/", authHandler.DeactivateMe)
+		api.POST("/users/me/change-email/", authHandler.RequestEmailChange)
+		api.POST("/users/me/change-email/verify/", authHandler.VerifyEmailChange)
 		api.GET("/workspaces/:slug/notification-preferences/", notifPrefHandler.GetWorkspace)
 		api.PUT("/workspaces/:slug/notification-preferences/", notifPrefHandler.UpdateWorkspace)
 		api.GET("/workspaces/:slug/projects/:projectId/notification-preferences/", notifPrefHandler.GetProject)
