@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Devlaner/devlane/api/internal/auth"
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/Devlaner/devlane/api/internal/store"
 	"github.com/google/uuid"
@@ -27,8 +28,13 @@ var (
 	ErrNoPendingEmailChange = errors.New("no pending email change")
 )
 
-// emailChangeCodeTTL bounds how long a verification code is valid.
-const emailChangeCodeTTL = 15 * time.Minute
+// emailChangeCodeTTL bounds how long a verification code is valid, and
+// maxEmailChangeAttempts bounds how many wrong guesses a code tolerates before
+// it is invalidated (defense in depth alongside route rate limiting).
+const (
+	emailChangeCodeTTL     = 15 * time.Minute
+	maxEmailChangeAttempts = 5
+)
 
 // AccountService handles self-service account actions: deactivation and the
 // verified email-change flow.
@@ -133,12 +139,15 @@ func (s *AccountService) ConfirmEmailChange(ctx context.Context, userID uuid.UUI
 	if req == nil {
 		return "", ErrNoPendingEmailChange
 	}
-	if time.Now().After(req.ExpiresAt) {
+	if time.Now().After(req.ExpiresAt) || req.Attempts >= maxEmailChangeAttempts {
 		_ = s.changes.DeleteByUserID(ctx, userID)
 		return "", ErrInvalidEmailCode
 	}
 	want := s.hashCode(userID, req.NewEmail, code)
 	if subtle.ConstantTimeCompare([]byte(req.CodeHash), []byte(want)) != 1 {
+		if n, aerr := s.changes.IncrementAttempts(ctx, userID); aerr == nil && n >= maxEmailChangeAttempts {
+			_ = s.changes.DeleteByUserID(ctx, userID)
+		}
 		return "", ErrInvalidEmailCode
 	}
 	existing, err := s.userByEmail(ctx, req.NewEmail)
@@ -163,11 +172,13 @@ func (s *AccountService) ConfirmEmailChange(ctx context.Context, userID uuid.UUI
 }
 
 // hashCode binds the code to the user and target email so a code for one change
-// can never verify a different one.
+// can never verify a different one. When no secret is configured it falls back
+// to the same development-only key as magic-code login, rather than introducing
+// a second hardcoded key.
 func (s *AccountService) hashCode(userID uuid.UUID, email, code string) string {
 	key := strings.TrimSpace(s.secret)
 	if key == "" {
-		key = "devlane-insecure-email-change-hmac-key-change-in-production"
+		key = auth.DefaultMagicCodeHMACKey
 	}
 	mac := hmac.New(sha256.New, []byte(key))
 	_, _ = mac.Write([]byte(userID.String()))

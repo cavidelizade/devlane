@@ -72,6 +72,26 @@ func TestAccount_EmailChange_HappyPath(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrNoPendingEmailChange)
 }
 
+// After too many wrong codes the pending request is invalidated, so even the
+// correct code no longer works (defense against brute-forcing the 6-digit code).
+func TestAccount_EmailChange_LocksOutAfterMaxAttempts(t *testing.T) {
+	db := testutil.NewTestServer(t).DB
+	ctx := context.Background()
+	u := testutil.CreateUser(t, db)
+	svc := newAccountSvc(db)
+
+	code, err := svc.RequestEmailChange(ctx, u.ID, "later@example.com")
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		_, err = svc.ConfirmEmailChange(ctx, u.ID, "wrong0")
+		require.ErrorIs(t, err, service.ErrInvalidEmailCode)
+	}
+	// The request is now gone; the correct code no longer verifies.
+	_, err = svc.ConfirmEmailChange(ctx, u.ID, code)
+	require.ErrorIs(t, err, service.ErrNoPendingEmailChange)
+}
+
 // Requesting a change to an address another account already uses is rejected.
 func TestAccount_EmailChange_InUse(t *testing.T) {
 	db := testutil.NewTestServer(t).DB

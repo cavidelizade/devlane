@@ -357,6 +357,7 @@ export function SettingsPage() {
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = useState(false);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
   // Email-change flow: 'idle' (show Change), 'request' (enter new email),
   // 'verify' (enter the emailed code).
   const [emailChangeStep, setEmailChangeStep] = useState<'idle' | 'request' | 'verify'>('idle');
@@ -377,47 +378,62 @@ export function SettingsPage() {
     return fallback;
   };
 
+  // Bumped whenever the email-change flow is reset/cancelled; in-flight requests
+  // captured an earlier value and bail out instead of resurrecting the panel.
+  const emailFlowToken = useRef(0);
+
   const resetEmailChange = () => {
+    emailFlowToken.current += 1;
     setEmailChangeStep('idle');
     setEmailChangeNew('');
     setEmailChangeCode('');
     setEmailChangeError(null);
+    setEmailChangeBusy(false);
   };
 
   const requestEmailChange = async () => {
+    const token = emailFlowToken.current;
     setEmailChangeError(null);
     setEmailChangeBusy(true);
     try {
       await accountService.requestEmailChange(emailChangeNew.trim());
+      if (emailFlowToken.current !== token) return;
       setEmailChangeStep('verify');
     } catch (e: unknown) {
+      if (emailFlowToken.current !== token) return;
       setEmailChangeError(apiErrorMessage(e, 'Failed to send the confirmation code'));
     } finally {
-      setEmailChangeBusy(false);
+      if (emailFlowToken.current === token) setEmailChangeBusy(false);
     }
   };
 
   const verifyEmailChange = async () => {
+    const token = emailFlowToken.current;
     setEmailChangeError(null);
     setEmailChangeBusy(true);
     try {
       const updated = await accountService.verifyEmailChange(emailChangeCode.trim());
+      if (emailFlowToken.current !== token) return;
       setProfileEmail(updated);
       await refreshUser();
+      if (emailFlowToken.current !== token) return;
       resetEmailChange();
     } catch (e: unknown) {
+      if (emailFlowToken.current !== token) return;
       setEmailChangeError(apiErrorMessage(e, 'Failed to confirm the new email'));
     } finally {
-      setEmailChangeBusy(false);
+      if (emailFlowToken.current === token) setEmailChangeBusy(false);
     }
   };
 
   const deactivateAccount = async () => {
+    setDeactivateError(null);
     setDeactivateBusy(true);
     try {
       await accountService.deactivate();
       await logout();
-    } catch {
+    } catch (e: unknown) {
+      setDeactivateError(apiErrorMessage(e, 'Failed to deactivate account. Please try again.'));
       setDeactivateBusy(false);
     }
   };
@@ -1088,7 +1104,11 @@ export function SettingsPage() {
               </Card>
               <Modal
                 open={deactivateConfirmOpen}
-                onClose={() => setDeactivateConfirmOpen(false)}
+                onClose={() => {
+                  if (deactivateBusy) return;
+                  setDeactivateError(null);
+                  setDeactivateConfirmOpen(false);
+                }}
                 title="Deactivate account?"
               >
                 <div className="space-y-4">
@@ -1096,17 +1116,24 @@ export function SettingsPage() {
                     You&apos;ll be signed out everywhere and won&apos;t be able to sign back in.
                     Reactivating your account requires an administrator.
                   </p>
+                  {deactivateError && (
+                    <p className="text-sm text-(--txt-danger-primary)">{deactivateError}</p>
+                  )}
                   <div className="flex justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setDeactivateConfirmOpen(false)}>
+                    <Button
+                      variant="secondary"
+                      disabled={deactivateBusy}
+                      onClick={() => {
+                        setDeactivateError(null);
+                        setDeactivateConfirmOpen(false);
+                      }}
+                    >
                       Cancel
                     </Button>
                     <Button
                       className="text-(--txt-danger-primary)"
                       disabled={deactivateBusy}
-                      onClick={() => {
-                        setDeactivateConfirmOpen(false);
-                        void deactivateAccount();
-                      }}
+                      onClick={() => void deactivateAccount()}
                     >
                       {deactivateBusy ? 'Deactivating…' : 'Deactivate'}
                     </Button>
