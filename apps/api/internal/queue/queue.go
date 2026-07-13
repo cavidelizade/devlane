@@ -35,10 +35,12 @@ type SendEmailPayload struct {
 
 // WebhookPayload is the payload for webhook_deliver task.
 type WebhookPayload struct {
-	URL     string                 `json:"url"`
-	Secret  string                 `json:"secret,omitempty"`
-	Event   string                 `json:"event"`
-	Payload map[string]interface{} `json:"payload"`
+	WebhookID   string                 `json:"webhook_id,omitempty"`
+	WorkspaceID string                 `json:"workspace_id,omitempty"`
+	URL         string                 `json:"url"`
+	Secret      string                 `json:"secret,omitempty"`
+	Event       string                 `json:"event"`
+	Payload     map[string]interface{} `json:"payload"`
 }
 
 // Publisher publishes tasks to RabbitMQ.
