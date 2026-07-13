@@ -76,6 +76,7 @@ func New(cfg Config) (*gin.Engine, *service.ImporterService) {
 	searchStore := store.NewSearchStore(cfg.DB)
 	estimateStore := store.NewEstimateStore(cfg.DB)
 	intakeStore := store.NewIntakeStore(cfg.DB)
+	webhookStore := store.NewWebhookStore(cfg.DB)
 	pageStore := store.NewPageStore(cfg.DB)
 	notificationStore := store.NewNotificationStore(cfg.DB)
 	issueSubscriberStore := store.NewIssueSubscriberStore(cfg.DB)
@@ -160,6 +161,8 @@ func New(cfg Config) (*gin.Engine, *service.ImporterService) {
 	searchSvc := service.NewSearchService(searchStore, workspaceStore)
 	estimateSvc := service.NewEstimateService(estimateStore, projectStore, workspaceStore)
 	intakeSvc := service.NewIntakeService(intakeStore, issueStore, projectStore, workspaceStore)
+	webhookSvc := service.NewWebhookService(webhookStore, workspaceStore, cfg.Queue)
+	issueSvc.SetWebhookService(webhookSvc)
 	pageSvc := service.NewPageService(pageStore, projectStore, workspaceStore)
 	pageSvc.SetFavoriteStore(userFavoriteStore)
 	notificationSvc := service.NewNotificationService(notificationStore, workspaceStore, issueStore, projectStore, userStore, stateStore)
@@ -250,6 +253,7 @@ func New(cfg Config) (*gin.Engine, *service.ImporterService) {
 	searchHandler := &handler.SearchHandler{Svc: searchSvc}
 	estimateHandler := &handler.EstimateHandler{Estimate: estimateSvc}
 	intakeHandler := &handler.IntakeHandler{Intake: intakeSvc}
+	webhookHandler := &handler.WebhookHandler{Webhooks: webhookSvc}
 	issueHandler := &handler.IssueHandler{Issue: issueSvc}
 	importerHandler := &handler.ImporterHandler{Importers: importerSvc}
 	issueLinkHandler := &handler.IssueLinkHandler{Issue: issueSvc}
@@ -333,6 +337,11 @@ func New(cfg Config) (*gin.Engine, *service.ImporterService) {
 		api.GET("/workspaces/:slug/draft-issues/", issueHandler.ListWorkspaceDrafts)
 		api.GET("/workspaces/:slug/archived-issues/", issueHandler.ListWorkspaceArchived)
 		api.GET("/workspaces/:slug/archived-projects/", projectHandler.ListArchived)
+		api.GET("/workspaces/:slug/webhooks/", webhookHandler.List)
+		api.POST("/workspaces/:slug/webhooks/", webhookHandler.Create)
+		api.PATCH("/workspaces/:slug/webhooks/:webhookId/", webhookHandler.Update)
+		api.DELETE("/workspaces/:slug/webhooks/:webhookId/", webhookHandler.Delete)
+		api.GET("/workspaces/:slug/webhooks/:webhookId/logs/", webhookHandler.ListLogs)
 		api.GET("/workspaces/:slug/search/", searchHandler.Search)
 
 		api.GET("/workspaces/:slug/projects/", projectHandler.List)

@@ -5,6 +5,7 @@ import { CoverImageModal } from '../components/CoverImageModal';
 import { IntegrationsSection } from '../components/integrations/IntegrationsSection';
 import { ProjectEstimatesSettings } from '../components/settings/ProjectEstimatesSettings';
 import { NotificationPreferencesPanel } from '../components/settings/NotificationPreferencesPanel';
+import { WebhooksSettings } from '../components/settings/WebhooksSettings';
 import { notificationPreferenceService } from '../services/notificationPreferenceService';
 import { accountService } from '../services/accountService';
 import { UploadImageModal } from '../components/UploadImageModal';
@@ -3361,14 +3362,8 @@ export function SettingsPage() {
             </div>
           )}
 
-          {!isAccountTab && !isProjectsTab && section === 'webhooks' && (
-            <Card variant="outlined">
-              <CardContent className="py-10 text-center">
-                <p className="text-sm text-(--txt-secondary)">
-                  Webhooks settings will be available when the API is connected.
-                </p>
-              </CardContent>
-            </Card>
+          {!isAccountTab && !isProjectsTab && section === 'webhooks' && workspaceSlug && (
+            <WebhooksSettings workspaceSlug={workspaceSlug} />
           )}
         </main>
       </div>

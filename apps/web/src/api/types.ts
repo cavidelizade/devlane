@@ -372,6 +372,36 @@ export interface ImporterApiResponse {
   updated_at?: string;
 }
 
+/** An outbound workspace webhook. */
+export interface WebhookApiResponse {
+  id: string;
+  url: string;
+  secret_key?: string;
+  is_active: boolean;
+  project: boolean;
+  issue: boolean;
+  module: boolean;
+  cycle: boolean;
+  issue_comment: boolean;
+  version: string;
+  workspace_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** One webhook delivery attempt (request + response). */
+export interface WebhookLogApiResponse {
+  id: string;
+  webhook_id: string;
+  event_type: string;
+  request_method: string;
+  request_body?: string;
+  response_status: string;
+  response_body?: string;
+  retry_count: number;
+  created_at?: string;
+}
+
 export interface IntakeItemApiResponse {
   id: string;
   intake_id: string;
