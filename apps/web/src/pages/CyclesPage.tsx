@@ -27,7 +27,7 @@ import {
   PROJECT_CYCLES_FILTER_EVENT,
   PROJECT_CYCLES_REFRESH_EVENT,
 } from '../lib/projectCyclesEvents';
-import { useCycleFavorites } from '../hooks/useCycleFavorites';
+import { useWorkspaceFavorites } from '../hooks/useWorkspaceFavorites';
 import { parseISODateForDisplay, parseISODateLocal } from '../lib/dateOnly';
 import { cyclePathSegment } from '../lib/cycle';
 import { cn, getImageUrl } from '../lib/utils';
@@ -334,7 +334,17 @@ export function CyclesPage() {
   const [deleteCycleId, setDeleteCycleId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const { toggleFavorite, isFavorite } = useCycleFavorites(workspaceSlug, projectId);
+  const { isFavorited, toggleEntity } = useWorkspaceFavorites(workspaceSlug);
+  const isFavorite = (id: string) => isFavorited('cycle', id);
+  const toggleFavorite = (cycle: { id: string; name: string }) => {
+    if (!projectId) return;
+    void toggleEntity({
+      entity_type: 'cycle',
+      entity_id: cycle.id,
+      project_id: projectId,
+      name: cycle.name,
+    });
+  };
 
   const [filters, setFilters] = useState<CyclesFiltersState>({
     searchQuery: null,
@@ -821,7 +831,7 @@ export function CyclesPage() {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            void toggleFavorite(c.id);
+            void toggleFavorite(c);
           }}
         >
           {isFavorite(c.id) ? (
@@ -983,7 +993,7 @@ export function CyclesPage() {
                 aria-label={
                   isFavorite(activeCycle.id) ? 'Remove from favorites' : 'Add to favorites'
                 }
-                onClick={() => void toggleFavorite(activeCycle.id)}
+                onClick={() => void toggleFavorite(activeCycle)}
               >
                 {isFavorite(activeCycle.id) ? (
                   <span className="text-amber-500">

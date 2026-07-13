@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { workspaceService } from '../../services/workspaceService';
@@ -7,8 +7,6 @@ import { favoriteService } from '../../services/favoriteService';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
-  ModuleApiResponse,
-  CycleApiResponse,
   IssueViewApiResponse,
 } from '../../api/types';
 import { CreateWorkItemModal } from '../CreateWorkItemModal';
@@ -18,15 +16,11 @@ import { ProjectIconDisplay } from '../ProjectIconModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import { cn, getImageUrl } from '../../lib/utils';
-import { moduleService } from '../../services/moduleService';
-import { cycleService } from '../../services/cycleService';
 import { viewService } from '../../services/viewService';
-import { slugify } from '../../lib/slug';
-import { cyclePathSegment } from '../../lib/cycle';
 import { OPEN_COMMAND_PALETTE } from '../../lib/commandPaletteEvents';
 import { ISSUE_VIEW_FAVORITES_CHANGED_EVENT } from '../../lib/issueViewFavoritesEvents';
-import { CYCLE_FAVORITES_CHANGED_EVENT } from '../../hooks/useCycleFavorites';
 import { IntakeNavBadge } from './IntakeNavBadge';
+import { WorkspaceFavoritesTree } from './WorkspaceFavoritesTree';
 
 const SIDEBAR_WIDTH = 256;
 const SIDEBAR_WIDTH_COLLAPSED = 0;
@@ -469,14 +463,6 @@ export function Sidebar() {
   const [workspaces, setWorkspaces] = useState<WorkspaceApiResponse[]>([]);
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
   const { favoriteProjectIds, setFavoriteProjectIds } = useFavorites();
-  const [favoriteModules, setFavoriteModules] = useState<
-    Array<{ projectId: string; module: ModuleApiResponse }>
-  >([]);
-  const [moduleFavoritesNonce, setModuleFavoritesNonce] = useState(0);
-  const [favoriteCycles, setFavoriteCycles] = useState<
-    Array<{ projectId: string; cycle: CycleApiResponse }>
-  >([]);
-  const [cycleFavoritesNonce, setCycleFavoritesNonce] = useState(0);
   const [favoriteIssueViews, setFavoriteIssueViews] = useState<IssueViewApiResponse[]>([]);
   const [issueViewFavoritesNonce, setIssueViewFavoritesNonce] = useState(0);
   const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
@@ -497,35 +483,6 @@ export function Sidebar() {
   const workspace = workspaces.find((w) => w.slug === workspaceSlug) ?? workspaces[0] ?? null;
   const baseUrl = workspaceSlug ? `/${workspaceSlug}` : workspace ? `/${workspace.slug}` : '';
   const favoriteProjects = projects.filter((p) => favoriteProjectIds.includes(p.id));
-
-  const MODULE_STORAGE_KEY_PREFIX = 'module_favorites';
-  const CYCLE_STORAGE_KEY_PREFIX = 'cycle_favorites';
-  const moduleStorageKey = (workspaceId: string, projId: string) =>
-    `${MODULE_STORAGE_KEY_PREFIX}_${workspaceId}_${projId}`;
-  const cycleStorageKey = (workspaceId: string, projId: string) =>
-    `${CYCLE_STORAGE_KEY_PREFIX}_${workspaceId}_${projId}`;
-
-  const loadModuleFavoriteIds = useCallback((workspaceId: string, projId: string) => {
-    try {
-      const raw = localStorage.getItem(moduleStorageKey(workspaceId, projId));
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as unknown;
-      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const loadCycleFavoriteIds = useCallback((workspaceId: string, projId: string) => {
-    try {
-      const raw = localStorage.getItem(cycleStorageKey(workspaceId, projId));
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as unknown;
-      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
-    } catch {
-      return [];
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -560,87 +517,6 @@ export function Sidebar() {
     };
   }, [slugForProjects]);
 
-  // Only the projects that actually have starred modules, as a stable string.
-  // Keying the fetch effect on this (instead of the whole projects array) stops
-  // the per-project module fetches from re-running every time projects is
-  // replaced with a fresh array on workspace load.
-  const moduleFavProjectIds = useMemo(() => {
-    if (!workspaceSlug) return '';
-    return projects
-      .map((p) => p.id)
-      .filter((id) => loadModuleFavoriteIds(workspaceSlug, id).length > 0)
-      .sort()
-      .join(',');
-    // moduleFavoritesNonce forces a recompute after a toggle mutates the
-    // (non-reactive) localStorage the filter reads from.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, projects, loadModuleFavoriteIds, moduleFavoritesNonce]);
-
-  useEffect(() => {
-    if (!workspaceSlug || !moduleFavProjectIds) {
-      setFavoriteModules([]);
-      return;
-    }
-    // Load starred modules from localStorage, then resolve names via module list.
-    let cancelled = false;
-    const run = async () => {
-      const entries: Array<{ projectId: string; module: ModuleApiResponse }> = [];
-      for (const projectId of moduleFavProjectIds.split(',')) {
-        const favIds = loadModuleFavoriteIds(workspaceSlug, projectId);
-        if (!favIds.length) continue;
-        const mods = await moduleService.list(workspaceSlug, projectId);
-        const favSet = new Set(favIds);
-        for (const m of mods ?? []) {
-          if (favSet.has(m.id)) {
-            entries.push({ projectId, module: m });
-          }
-        }
-      }
-      if (!cancelled) setFavoriteModules(entries);
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, moduleFavProjectIds, moduleFavoritesNonce, loadModuleFavoriteIds]);
-
-  const cycleFavProjectIds = useMemo(() => {
-    if (!workspaceSlug) return '';
-    return projects
-      .map((p) => p.id)
-      .filter((id) => loadCycleFavoriteIds(workspaceSlug, id).length > 0)
-      .sort()
-      .join(',');
-    // cycleFavoritesNonce forces a recompute after a toggle mutates the
-    // (non-reactive) localStorage the filter reads from.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, projects, loadCycleFavoriteIds, cycleFavoritesNonce]);
-
-  useEffect(() => {
-    if (!workspaceSlug || !cycleFavProjectIds) {
-      setFavoriteCycles([]);
-      return;
-    }
-    let cancelled = false;
-    const run = async () => {
-      const results = await Promise.all(
-        cycleFavProjectIds.split(',').map(async (projectId) => {
-          const favSet = new Set(loadCycleFavoriteIds(workspaceSlug, projectId));
-          const cycles = await cycleService.list(workspaceSlug, projectId);
-          return (cycles ?? [])
-            .filter((c) => favSet.has(c.id))
-            .map((c) => ({ projectId, cycle: c }));
-        }),
-      );
-      const entries = results.flat();
-      if (!cancelled) setFavoriteCycles(entries);
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, cycleFavProjectIds, cycleFavoritesNonce, loadCycleFavoriteIds]);
-
   useEffect(() => {
     if (!workspaceSlug) {
       setFavoriteIssueViews([]);
@@ -670,55 +546,6 @@ export function Sidebar() {
     window.addEventListener(ISSUE_VIEW_FAVORITES_CHANGED_EVENT, handler as EventListener);
     return () => {
       window.removeEventListener(ISSUE_VIEW_FAVORITES_CHANGED_EVENT, handler as EventListener);
-    };
-  }, [workspaceSlug]);
-
-  // Keep the "Favorites -> Modules" list in sync without requiring a full refresh.
-  useEffect(() => {
-    if (!workspaceSlug) return;
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{
-        workspaceId?: string;
-        projectId?: string;
-        moduleId?: string;
-        isFavorite?: boolean;
-      }>;
-      if (ce?.detail?.workspaceId !== workspaceSlug) return;
-      const { moduleId, isFavorite } = ce.detail ?? {};
-
-      // Optimistically remove immediately on un-favorite.
-      if (moduleId && isFavorite === false) {
-        setFavoriteModules((prev) => prev.filter(({ module }) => module.id !== moduleId));
-      }
-
-      // Always reload after a change to ensure names and newly-added items are correct.
-      setModuleFavoritesNonce((n) => n + 1);
-    };
-    window.addEventListener('module-favorites-changed', handler as EventListener);
-    return () => {
-      window.removeEventListener('module-favorites-changed', handler as EventListener);
-    };
-  }, [workspaceSlug]);
-
-  useEffect(() => {
-    if (!workspaceSlug) return;
-    const handler = (e: Event) => {
-      const ce = e as CustomEvent<{
-        workspaceId?: string;
-        projectId?: string;
-        cycleId?: string;
-        isFavorite?: boolean;
-      }>;
-      if (ce?.detail?.workspaceId !== workspaceSlug) return;
-      const { cycleId, isFavorite } = ce.detail ?? {};
-      if (cycleId && isFavorite === false) {
-        setFavoriteCycles((prev) => prev.filter(({ cycle }) => cycle.id !== cycleId));
-      }
-      setCycleFavoritesNonce((n) => n + 1);
-    };
-    window.addEventListener(CYCLE_FAVORITES_CHANGED_EVENT, handler as EventListener);
-    return () => {
-      window.removeEventListener(CYCLE_FAVORITES_CHANGED_EVENT, handler as EventListener);
     };
   }, [workspaceSlug]);
 
@@ -1219,41 +1046,8 @@ export function Sidebar() {
                       <span className="truncate">{view.name}</span>
                     </Link>
                   ))}
-                  {favoriteModules.length > 0 && (
-                    <>
-                      {favoriteModules.map(({ projectId, module }) => (
-                        <Link
-                          key={`${projectId}:${module.id}`}
-                          to={`${baseUrl}/projects/${projectId}/modules/${slugify(module.name)}`}
-                          className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)"
-                        >
-                          <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
-                            <IconModuleGrid />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="truncate">{module.name}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </>
-                  )}
-                  {favoriteCycles.length > 0 && (
-                    <>
-                      {favoriteCycles.map(({ projectId, cycle }) => (
-                        <Link
-                          key={`${projectId}:${cycle.id}`}
-                          to={`${baseUrl}/projects/${projectId}/cycles/${cyclePathSegment(cycle)}`}
-                          className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-1.5 text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary)"
-                        >
-                          <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
-                            <IconIterationCw />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="truncate">{cycle.name}</span>
-                          </div>
-                        </Link>
-                      ))}
-                    </>
+                  {workspaceSlug && (
+                    <WorkspaceFavoritesTree workspaceSlug={workspaceSlug} baseUrl={baseUrl} />
                   )}
                 </div>
               )}
