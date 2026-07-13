@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { workspaceService } from '../../services/workspaceService';
@@ -446,6 +447,7 @@ const projectNavItems = [
 
 /** Pill + grid icon — matches the “Modules” category badge (not list progress rings). */
 export function Sidebar() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
@@ -671,7 +673,7 @@ export function Sidebar() {
           maxWidth: `${width}px`,
         }}
         role="complementary"
-        aria-label="Main sidebar"
+        aria-label={t('nav.sidebar.ariaLabel', 'Main sidebar')}
       >
         <aside className="flex h-full w-full flex-col overflow-hidden bg-(--bg-surface-1)">
           {/* 1. Top: Workspace name (left, clickable) + User avatar (right) */}
@@ -683,7 +685,7 @@ export function Sidebar() {
               className="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-md) py-0.5 text-left outline-none hover:bg-(--bg-layer-transparent-hover) focus-visible:outline-none"
               aria-expanded={workspaceDropdownOpen}
               aria-haspopup="true"
-              aria-label="Workspace menu"
+              aria-label={t('nav.workspaceMenu', 'Workspace menu')}
             >
               <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-(--radius-md) bg-(--bg-layer-1) text-sm font-semibold text-(--txt-secondary)">
                 {workspace?.logo && getImageUrl(workspace.logo) ? (
@@ -697,7 +699,7 @@ export function Sidebar() {
                 )}
               </div>
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--txt-primary)">
-                {workspace?.name ?? 'Loading…'}
+                {workspace?.name ?? t('common.loading', 'Loading…')}
               </span>
               <span
                 className={cn(
@@ -714,11 +716,15 @@ export function Sidebar() {
                 type="button"
                 onClick={() => setCollapsed(true)}
                 className="flex size-8 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-transparent-hover)"
-                aria-label="Collapse sidebar"
+                aria-label={t('common.collapseSidebar', 'Collapse sidebar')}
               >
                 <IconPanelLeft />
               </button>
-              <Avatar name={user?.name ?? 'User'} src={getImageUrl(user?.avatarUrl)} size="sm" />
+              <Avatar
+                name={user?.name ?? t('common.user', 'User')}
+                src={getImageUrl(user?.avatarUrl)}
+                size="sm"
+              />
             </div>
           </div>
 
@@ -756,7 +762,9 @@ export function Sidebar() {
                     <p className="truncate text-sm font-semibold text-(--txt-primary)">
                       {workspace?.name ?? '—'}
                     </p>
-                    <p className="text-xs text-(--txt-tertiary)">Members</p>
+                    <p className="text-xs text-(--txt-tertiary)">
+                      {t('common.members', 'Members')}
+                    </p>
                   </div>
                   <span className="shrink-0 text-(--txt-primary)" aria-hidden>
                     <IconCheck />
@@ -769,7 +777,7 @@ export function Sidebar() {
                     className="flex flex-1 items-center justify-center gap-1 rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-layer-2) px-1.5 py-1.5 text-[12px] font-medium text-(--txt-primary) hover:bg-(--bg-layer-2-hover) whitespace-nowrap"
                   >
                     <IconSettings />
-                    Settings
+                    {t('nav.settings', 'Settings')}
                   </Link>
                   <Link
                     to={baseUrl ? `${baseUrl}/settings?section=members` : '/settings'}
@@ -777,7 +785,7 @@ export function Sidebar() {
                     className="flex flex-1 items-center justify-center gap-1 rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-layer-2) px-1.5 py-1.5 text-[12px] font-medium text-(--txt-primary) hover:bg-(--bg-layer-2-hover) whitespace-nowrap no-underline"
                   >
                     <IconUserPlus />
-                    Invite members
+                    {t('nav.inviteMembers', 'Invite members')}
                   </Link>
                 </div>
                 <div className="flex flex-col gap-0.5 border-t border-(--border-subtle) pt-3">
@@ -787,7 +795,7 @@ export function Sidebar() {
                     className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-2 text-left text-[13px] font-medium text-(--txt-secondary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-primary) no-underline"
                   >
                     <IconEnvelope />
-                    Workspace invites
+                    {t('nav.workspaceInvites', 'Workspace invites')}
                   </Link>
                   <button
                     type="button"
@@ -798,7 +806,7 @@ export function Sidebar() {
                     className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-2 text-left text-[13px] font-medium text-(--txt-danger-primary) hover:bg-(--bg-danger-subtle) hover:text-(--txt-danger-primary)"
                   >
                     <IconLogOut />
-                    Sign out
+                    {t('nav.signOut', 'Sign out')}
                   </button>
                 </div>
               </div>,
@@ -813,14 +821,14 @@ export function Sidebar() {
               onClick={() => setCreateWorkItemOpen(true)}
             >
               <IconPencil />
-              <span className="truncate">New work item</span>
+              <span className="truncate">{t('nav.newWorkItem', 'New work item')}</span>
             </Button>
             <button
               type="button"
               onClick={() => baseUrl && setCommandPaletteOpen(true)}
               disabled={!baseUrl}
               className="flex size-9 shrink-0 items-center justify-center rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) text-(--txt-icon-tertiary) transition-[background-color,box-shadow,transform] duration-150 hover:bg-(--bg-layer-1-hover) hover:shadow-sm active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
-              aria-label="Open command palette"
+              aria-label={t('nav.openCommandPalette', 'Open command palette')}
               aria-keyshortcuts="Control+K Meta+K"
             >
               <IconSearch />
@@ -851,7 +859,7 @@ export function Sidebar() {
                 >
                   <IconHome />
                 </span>
-                Home
+                {t('nav.home', 'Home')}
               </NavLink>
               <NavLink
                 to={baseUrl ? `${baseUrl}/notifications` : '/'}
@@ -868,7 +876,7 @@ export function Sidebar() {
                 <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                   <IconInbox />
                 </span>
-                Inbox
+                {t('nav.inbox', 'Inbox')}
               </NavLink>
               <NavLink
                 to={baseUrl && user ? `${baseUrl}/profile/${user.id}` : baseUrl || '/'}
@@ -885,7 +893,7 @@ export function Sidebar() {
                 <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                   <IconUser />
                 </span>
-                Your work
+                {t('nav.yourWork', 'Your work')}
               </NavLink>
             </div>
 
@@ -897,7 +905,7 @@ export function Sidebar() {
                 className="group flex w-full items-center justify-between gap-2 rounded-(--radius-md) px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-(--txt-placeholder) outline-none hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary)"
                 aria-expanded={workspaceSectionExpanded}
               >
-                <span>Workspace</span>
+                <span>{t('nav.section.workspace', 'Workspace')}</span>
                 <span className="flex size-4 shrink-0 items-center justify-center opacity-0 transition-[opacity,transform] duration-150 group-hover:opacity-100">
                   <IconChevronRight
                     className={cn(
@@ -924,7 +932,7 @@ export function Sidebar() {
                     <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                       <IconBriefcase />
                     </span>
-                    Projects
+                    {t('nav.projects', 'Projects')}
                   </NavLink>
                   <NavLink
                     to={baseUrl ? `${baseUrl}/views/all-issues` : '/'}
@@ -940,7 +948,7 @@ export function Sidebar() {
                     <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                       <IconLayers />
                     </span>
-                    Views
+                    {t('nav.views', 'Views')}
                   </NavLink>
                   <NavLink
                     to={baseUrl ? `${baseUrl}/analytics` : '/'}
@@ -957,7 +965,7 @@ export function Sidebar() {
                     <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                       <IconBarChart />
                     </span>
-                    Analytics
+                    {t('nav.analytics', 'Analytics')}
                   </NavLink>
                   <NavLink
                     to={baseUrl ? `${baseUrl}/drafts` : '/'}
@@ -974,7 +982,7 @@ export function Sidebar() {
                     <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                       <IconPencil />
                     </span>
-                    Drafts
+                    {t('nav.drafts', 'Drafts')}
                   </NavLink>
                   <NavLink
                     to={baseUrl ? `${baseUrl}/archives` : '/'}
@@ -991,7 +999,7 @@ export function Sidebar() {
                     <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                       <IconArchive />
                     </span>
-                    Archives
+                    {t('nav.archives', 'Archives')}
                   </NavLink>
                 </div>
               )}
@@ -1005,7 +1013,7 @@ export function Sidebar() {
                 className="group flex w-full items-center justify-between gap-2 rounded-(--radius-md) px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-(--txt-placeholder) outline-none hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary)"
                 aria-expanded={favoritesSectionExpanded}
               >
-                <span>Favorites</span>
+                <span>{t('nav.section.favorites', 'Favorites')}</span>
                 <span className="flex size-4 shrink-0 items-center justify-center opacity-0 transition-[opacity,transform] duration-150 group-hover:opacity-100">
                   <IconChevronRight
                     className={cn(
@@ -1062,7 +1070,7 @@ export function Sidebar() {
                   className="group flex w-full items-center justify-between gap-2 rounded-(--radius-md) px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-(--txt-placeholder) outline-none hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary)"
                   aria-expanded={projectsSectionExpanded}
                 >
-                  <span>Projects</span>
+                  <span>{t('nav.section.projects', 'Projects')}</span>
                   <span className="flex size-4 shrink-0 items-center justify-center opacity-0 transition-[opacity,transform] duration-150 group-hover:opacity-100">
                     <IconChevronRight
                       className={cn(
@@ -1124,7 +1132,7 @@ export function Sidebar() {
                                 <span className="flex size-4 shrink-0 items-center justify-center text-(--txt-icon-tertiary)">
                                   <Icon />
                                 </span>
-                                {label}
+                                {t(`nav.project.${key}`, label)}
                                 {key === 'intake' && workspaceSlug && (
                                   <IntakeNavBadge
                                     workspaceSlug={workspaceSlug}
@@ -1156,7 +1164,7 @@ export function Sidebar() {
               <button
                 type="button"
                 className="flex size-8 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-icon-secondary)"
-                aria-label="Help"
+                aria-label={t('nav.help', 'Help')}
               >
                 <IconHelp />
               </button>
@@ -1164,8 +1172,16 @@ export function Sidebar() {
                 type="button"
                 onClick={() => setCollapsed((c) => !c)}
                 className="flex size-8 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-icon-secondary)"
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                aria-label={
+                  collapsed
+                    ? t('common.expandSidebar', 'Expand sidebar')
+                    : t('common.collapseSidebar', 'Collapse sidebar')
+                }
+                title={
+                  collapsed
+                    ? t('common.expandSidebar', 'Expand sidebar')
+                    : t('common.collapseSidebar', 'Collapse sidebar')
+                }
               >
                 <IconPanelLeft />
               </button>
@@ -1183,7 +1199,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setCollapsed(false)}
             className="flex size-8 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-transparent-hover)"
-            aria-label="Expand sidebar"
+            aria-label={t('common.expandSidebar', 'Expand sidebar')}
           >
             <span className="rotate-180">
               <IconPanelLeft />
@@ -1194,8 +1210,8 @@ export function Sidebar() {
             onClick={() => baseUrl && setCommandPaletteOpen(true)}
             disabled={!baseUrl}
             className="flex size-8 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) transition-colors hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary) disabled:pointer-events-none disabled:opacity-40"
-            aria-label="Open command palette"
-            title="Search"
+            aria-label={t('nav.openCommandPalette', 'Open command palette')}
+            title={t('nav.search', 'Search')}
           >
             <IconSearch />
           </button>

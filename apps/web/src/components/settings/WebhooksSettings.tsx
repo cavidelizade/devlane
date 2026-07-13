@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Card, CardContent, Button, Modal } from '../ui';
 import { Badge } from '../ui/Badge';
 import { IconPlus, IconTrash, IconRefresh } from './icons';
@@ -20,8 +21,6 @@ const EVENTS: { key: EventKey; label: string; hint: string }[] = [
   { key: 'issue_comment', label: 'Issue comments', hint: 'New comments on issues' },
 ];
 
-const relTime = (iso?: string) => (iso ? formatRelativeTime(iso) : 'unknown');
-
 const emptyForm = (): Record<EventKey, boolean> & { url: string } => ({
   url: '',
   project: false,
@@ -38,6 +37,9 @@ const emptyForm = (): Record<EventKey, boolean> & { url: string } => ({
  * shown once at creation. Non-admins get a 403 from the API, surfaced here.
  */
 export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
+  const { t } = useTranslation();
+  const relTime = (iso?: string) =>
+    iso ? formatRelativeTime(iso) : t('common.unknown', 'Unknown');
   const [webhooks, setWebhooks] = useState<WebhookApiResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -64,12 +66,17 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       setWebhooks([]);
       setLoadError(
-        status === 403 ? 'Only workspace admins can manage webhooks.' : 'Could not load webhooks.',
+        status === 403
+          ? t(
+              'settings.webhooks.error.adminOnlyManage',
+              'Only workspace admins can manage webhooks.',
+            )
+          : t('settings.webhooks.error.load', 'Could not load webhooks.'),
       );
     } finally {
       setLoading(false);
     }
-  }, [workspaceSlug]);
+  }, [workspaceSlug, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,8 +93,11 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
         setWebhooks([]);
         setLoadError(
           status === 403
-            ? 'Only workspace admins can manage webhooks.'
-            : 'Could not load webhooks.',
+            ? t(
+                'settings.webhooks.error.adminOnlyManage',
+                'Only workspace admins can manage webhooks.',
+              )
+            : t('settings.webhooks.error.load', 'Could not load webhooks.'),
         );
       })
       .finally(() => {
@@ -96,7 +106,7 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
     return () => {
       cancelled = true;
     };
-  }, [workspaceSlug]);
+  }, [workspaceSlug, t]);
 
   const openCreate = () => {
     setForm(emptyForm());
@@ -132,10 +142,16 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       setCreateError(
         status === 400
-          ? 'Enter a valid public http(s) URL.'
+          ? t('settings.webhooks.error.invalidUrl', 'Enter a valid public http(s) URL.')
           : status === 403
-            ? 'Only workspace admins can create webhooks.'
-            : 'Could not create the webhook. Please try again.',
+            ? t(
+                'settings.webhooks.error.adminOnlyCreate',
+                'Only workspace admins can create webhooks.',
+              )
+            : t(
+                'settings.webhooks.error.create',
+                'Could not create the webhook. Please try again.',
+              ),
       );
     } finally {
       setCreating(false);
@@ -151,7 +167,9 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       });
       setWebhooks((prev) => prev.map((x) => (x.id === w.id ? updated : x)));
     } catch {
-      setRowError('Could not update the webhook. Please try again.');
+      setRowError(
+        t('settings.webhooks.error.update', 'Could not update the webhook. Please try again.'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -164,7 +182,9 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       await webhookService.remove(workspaceSlug, w.id);
       setWebhooks((prev) => prev.filter((x) => x.id !== w.id));
     } catch {
-      setRowError('Could not delete the webhook. Please try again.');
+      setRowError(
+        t('settings.webhooks.error.delete', 'Could not delete the webhook. Please try again.'),
+      );
     } finally {
       setBusyId(null);
     }
@@ -178,34 +198,40 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
     try {
       setLogs(await webhookService.logs(workspaceSlug, w.id));
     } catch {
-      setLogsError('Could not load delivery logs.');
+      setLogsError(t('settings.webhooks.error.logs', 'Could not load delivery logs.'));
     } finally {
       setLogsLoading(false);
     }
   };
 
   const subscribedEvents = (w: WebhookApiResponse) =>
-    EVENTS.filter((e) => w[e.key]).map((e) => e.label);
+    EVENTS.filter((e) => w[e.key]).map((e) => t(`settings.webhooks.event.${e.key}.label`, e.label));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-(--txt-primary)">Webhooks</h2>
+          <h2 className="text-base font-semibold text-(--txt-primary)">
+            {t('settings.webhooks.title', 'Webhooks')}
+          </h2>
           <p className="mt-0.5 text-sm text-(--txt-secondary)">
-            Send signed HTTP POST payloads to your own endpoints when events happen in this
-            workspace. Each request carries an <code className="text-xs">X-Devlane-Signature</code>{' '}
-            HMAC-SHA256 header you can verify with the signing secret.
+            <Trans
+              i18nKey="settings.webhooks.description"
+              defaults="Send signed HTTP POST payloads to your own endpoints when events happen in this workspace. Each request carries an <code>X-Devlane-Signature</code> HMAC-SHA256 header you can verify with the signing secret."
+              components={{ code: <code className="text-xs" /> }}
+            />
           </p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={openCreate}>
           <IconPlus />
-          Add webhook
+          {t('settings.webhooks.add', 'Add webhook')}
         </Button>
       </div>
 
       {loading ? (
-        <div className="py-10 text-center text-sm text-(--txt-tertiary)">Loading webhooks…</div>
+        <div className="py-10 text-center text-sm text-(--txt-tertiary)">
+          {t('settings.webhooks.loading', 'Loading webhooks…')}
+        </div>
       ) : loadError ? (
         <Card variant="outlined">
           <CardContent className="py-10 text-center">
@@ -215,7 +241,9 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       ) : webhooks.length === 0 ? (
         <Card variant="outlined">
           <CardContent className="py-10 text-center">
-            <p className="text-sm text-(--txt-tertiary)">No webhooks yet.</p>
+            <p className="text-sm text-(--txt-tertiary)">
+              {t('settings.webhooks.empty', 'No webhooks yet.')}
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -232,12 +260,16 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium text-(--txt-primary)">{w.url}</p>
                     <Badge variant={w.is_active ? 'success' : 'neutral'}>
-                      {w.is_active ? 'Active' : 'Paused'}
+                      {w.is_active
+                        ? t('settings.webhooks.status.active', 'Active')
+                        : t('settings.webhooks.status.paused', 'Paused')}
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-(--txt-tertiary)">
-                    {events.length ? events.join(', ') : 'No events'} · Created{' '}
-                    {relTime(w.created_at)}
+                    {events.length
+                      ? events.join(', ')
+                      : t('settings.webhooks.noEvents', 'No events')}{' '}
+                    · {t('common.created', 'Created')} {relTime(w.created_at)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -247,7 +279,7 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                     disabled={busyId === w.id}
                     onClick={() => openLogs(w)}
                   >
-                    Logs
+                    {t('settings.webhooks.logs', 'Logs')}
                   </Button>
                   <Button
                     variant="secondary"
@@ -255,7 +287,9 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                     disabled={busyId === w.id}
                     onClick={() => toggleActive(w)}
                   >
-                    {w.is_active ? 'Pause' : 'Resume'}
+                    {w.is_active
+                      ? t('settings.webhooks.pause', 'Pause')
+                      : t('settings.webhooks.resume', 'Resume')}
                   </Button>
                   <Button
                     variant="secondary"
@@ -265,7 +299,7 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                     onClick={() => handleDelete(w)}
                   >
                     <IconTrash />
-                    Delete
+                    {t('common.delete', 'Delete')}
                   </Button>
                 </div>
               </div>
@@ -278,26 +312,33 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       <Modal
         open={createOpen}
         onClose={closeCreate}
-        title={createdSecret !== null ? 'Webhook created' : 'Add webhook'}
+        title={
+          createdSecret !== null
+            ? t('settings.webhooks.createdTitle', 'Webhook created')
+            : t('settings.webhooks.add', 'Add webhook')
+        }
       >
         {createdSecret !== null ? (
           <div className="space-y-4">
             <p className="text-sm text-(--txt-secondary)">
-              Copy this signing secret now; it will not be shown again. Use it to verify the{' '}
-              <code className="text-xs">X-Devlane-Signature</code> header on incoming requests.
+              <Trans
+                i18nKey="settings.webhooks.secretHint"
+                defaults="Copy this signing secret now; it will not be shown again. Use it to verify the <code>X-Devlane-Signature</code> header on incoming requests."
+                components={{ code: <code className="text-xs" /> }}
+              />
             </p>
             <div className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-layer-2) px-3 py-2 font-mono text-sm text-(--txt-primary) break-all">
-              {createdSecret || '(no secret returned)'}
+              {createdSecret || t('settings.webhooks.noSecret', '(no secret returned)')}
             </div>
             <div className="flex justify-end">
-              <Button onClick={closeCreate}>Done</Button>
+              <Button onClick={closeCreate}>{t('common.done', 'Done')}</Button>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-(--txt-secondary)">
-                Endpoint URL
+                {t('settings.webhooks.endpointUrl', 'Endpoint URL')}
               </label>
               <input
                 type="url"
@@ -308,7 +349,9 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
               />
             </div>
             <div>
-              <p className="mb-2 text-sm font-medium text-(--txt-secondary)">Events</p>
+              <p className="mb-2 text-sm font-medium text-(--txt-secondary)">
+                {t('settings.webhooks.events', 'Events')}
+              </p>
               <div className="space-y-2">
                 {EVENTS.map((e) => (
                   <label key={e.key} className="flex items-start gap-2">
@@ -319,8 +362,10 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                       className="mt-0.5"
                     />
                     <span className="text-sm text-(--txt-primary)">
-                      {e.label}
-                      <span className="block text-xs text-(--txt-tertiary)">{e.hint}</span>
+                      {t(`settings.webhooks.event.${e.key}.label`, e.label)}
+                      <span className="block text-xs text-(--txt-tertiary)">
+                        {t(`settings.webhooks.event.${e.key}.hint`, e.hint)}
+                      </span>
                     </span>
                   </label>
                 ))}
@@ -329,13 +374,15 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
             {createError && <p className="text-sm text-(--txt-danger-primary)">{createError}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={closeCreate}>
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button
                 disabled={!form.url.trim() || !anyEventSelected || creating}
                 onClick={handleCreate}
               >
-                {creating ? 'Creating…' : 'Create webhook'}
+                {creating
+                  ? t('settings.webhooks.creating', 'Creating…')
+                  : t('settings.webhooks.create', 'Create webhook')}
               </Button>
             </div>
           </div>
@@ -343,7 +390,11 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
       </Modal>
 
       {/* Delivery logs modal */}
-      <Modal open={logsFor !== null} onClose={() => setLogsFor(null)} title="Delivery logs">
+      <Modal
+        open={logsFor !== null}
+        onClose={() => setLogsFor(null)}
+        title={t('settings.webhooks.deliveryLogs', 'Delivery logs')}
+      >
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-xs text-(--txt-tertiary)">{logsFor?.url}</p>
@@ -355,15 +406,19 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
               onClick={() => logsFor && openLogs(logsFor)}
             >
               <IconRefresh />
-              Refresh
+              {t('common.refresh', 'Refresh')}
             </Button>
           </div>
           {logsLoading ? (
-            <p className="py-8 text-center text-sm text-(--txt-tertiary)">Loading…</p>
+            <p className="py-8 text-center text-sm text-(--txt-tertiary)">
+              {t('common.loading', 'Loading…')}
+            </p>
           ) : logsError ? (
             <p className="py-8 text-center text-sm text-(--txt-danger-primary)">{logsError}</p>
           ) : logs.length === 0 ? (
-            <p className="py-8 text-center text-sm text-(--txt-tertiary)">No deliveries yet.</p>
+            <p className="py-8 text-center text-sm text-(--txt-tertiary)">
+              {t('settings.webhooks.noDeliveries', 'No deliveries yet.')}
+            </p>
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto">
               {logs.map((l) => {
@@ -379,12 +434,14 @@ export function WebhooksSettings({ workspaceSlug }: WebhooksSettingsProps) {
                         {l.event_type}
                       </span>
                       <Badge variant={ok ? 'success' : 'danger'}>
-                        {l.response_status || 'no response'}
+                        {l.response_status || t('settings.webhooks.noResponse', 'no response')}
                       </Badge>
                     </div>
                     <p className="mt-0.5 text-xs text-(--txt-tertiary)">
                       {relTime(l.created_at)}
-                      {l.retry_count > 0 ? ` · ${l.retry_count} retries` : ''}
+                      {l.retry_count > 0
+                        ? ` · ${t('settings.webhooks.retriesCount', '{{count}} retries', { count: l.retry_count })}`
+                        : ''}
                     </p>
                     {l.response_body && (
                       <p className="mt-1 truncate font-mono text-xs text-(--txt-tertiary)">

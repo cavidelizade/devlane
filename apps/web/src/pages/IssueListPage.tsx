@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../components/ui';
 import { CreateWorkItemModal } from '../components/CreateWorkItemModal';
 import { ImportCSVModal } from '../components/work-item/ImportCSVModal';
@@ -88,6 +89,7 @@ const IconPlus = () => (
 );
 
 export function IssueListPage() {
+  const { t } = useTranslation();
   const { workspaceSlug, projectId } = useParams<{
     workspaceSlug: string;
     projectId: string;
@@ -130,7 +132,7 @@ export function IssueListPage() {
   useLayoutEffect(() => {
     routeKeyRef.current = `${workspaceSlug ?? ''}/${projectId ?? ''}`;
   }, [workspaceSlug, projectId]);
-  useDocumentTitle('Work items');
+  useDocumentTitle(t('workItem.list.documentTitle', 'Work items'));
 
   const refetchIssues = () => {
     if (!workspaceSlug || !projectId) return;
@@ -164,7 +166,9 @@ export function IssueListPage() {
       clearSelection();
       refetchIssues();
     } catch {
-      setBulkError('Bulk action failed. Nothing was changed — try again.');
+      setBulkError(
+        t('workItem.list.bulkActionFailed', 'Bulk action failed. Nothing was changed — try again.'),
+      );
       refetchIssues();
     }
   };
@@ -559,19 +563,27 @@ export function IssueListPage() {
       refetchIssues();
       handleCloseCreate();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create work item');
+      setCreateError(
+        err instanceof Error
+          ? err.message
+          : t('workItem.list.createFailed', 'Failed to create work item'),
+      );
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-(--txt-tertiary)">
-        Loading…
+        {t('common.loading', 'Loading…')}
       </div>
     );
   }
   if (!workspace || !project) {
-    return <div className="text-(--txt-secondary)">Project not found.</div>;
+    return (
+      <div className="text-(--txt-secondary)">
+        {t('common.projectNotFound', 'Project not found.')}
+      </div>
+    );
   }
 
   const baseUrl = `/${workspace.slug}/projects/${project.id}`;
@@ -706,42 +718,50 @@ export function IssueListPage() {
           >
             <span className="size-2 rounded-full border border-current border-dashed" />
           </span>
-          All work items {filteredIssues.length}
+          {t('workItem.list.allWorkItems', 'All work items {{count}}', {
+            count: filteredIssues.length,
+          })}
           <button
             type="button"
             className="flex size-7 items-center justify-center rounded-md text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-            aria-label="Add work item"
+            aria-label={t('workItem.list.addWorkItem', 'Add work item')}
             onClick={() => setSearchParams({ create: '1' })}
           >
             <IconPlus />
           </button>
         </h2>
         <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-          Import CSV
+          {t('workItem.list.importCsv', 'Import CSV')}
         </Button>
       </div>
 
       {issues.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-4 px-4 py-12">
-          <p className="text-sm text-(--txt-tertiary)">No work items yet.</p>
+          <p className="text-sm text-(--txt-tertiary)">
+            {t('workItem.list.emptyNoItems', 'No work items yet.')}
+          </p>
           <Button size="sm" className="gap-1.5" onClick={() => setSearchParams({ create: '1' })}>
             <IconPlus />
-            New work item
+            {t('workItem.list.newWorkItem', 'New work item')}
           </Button>
         </div>
       ) : filteredIssues.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-4 px-4 py-12">
-          <p className="text-sm text-(--txt-tertiary)">No work items match your filters.</p>
+          <p className="text-sm text-(--txt-tertiary)">
+            {t('workItem.list.emptyNoMatch', 'No work items match your filters.')}
+          </p>
         </div>
       ) : (
         <>
           {layout === 'list' && visibleSelectedIds.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 border-b border-(--border-subtle) bg-(--bg-surface-1) px-4 py-2 text-sm">
               <span className="font-medium text-(--txt-secondary)">
-                {visibleSelectedIds.size} selected
+                {t('workItem.list.selectedCount', '{{count}} selected', {
+                  count: visibleSelectedIds.size,
+                })}
               </span>
               <select
-                aria-label="Set priority for selected"
+                aria-label={t('workItem.list.setPriorityForSelected', 'Set priority for selected')}
                 className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-xs text-(--txt-secondary)"
                 value=""
                 onChange={(e) => {
@@ -753,7 +773,9 @@ export function IssueListPage() {
                     );
                 }}
               >
-                <option value="">Set priority…</option>
+                <option value="">
+                  {t('workItem.list.setPriorityPlaceholder', 'Set priority…')}
+                </option>
                 {['urgent', 'high', 'medium', 'low', 'none'].map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -761,7 +783,7 @@ export function IssueListPage() {
                 ))}
               </select>
               <select
-                aria-label="Set state for selected"
+                aria-label={t('workItem.list.setStateForSelected', 'Set state for selected')}
                 className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-2 py-1 text-xs text-(--txt-secondary)"
                 value=""
                 onChange={(e) => {
@@ -773,7 +795,7 @@ export function IssueListPage() {
                     );
                 }}
               >
-                <option value="">Set state…</option>
+                <option value="">{t('workItem.list.setStatePlaceholder', 'Set state…')}</option>
                 {states.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.name}
@@ -785,24 +807,30 @@ export function IssueListPage() {
                 className="rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)"
                 onClick={() => void runBulk((s, p, ids) => issueService.bulkArchive(s, p, ids))}
               >
-                Archive
+                {t('common.archive', 'Archive')}
               </button>
               <button
                 type="button"
                 className="rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-danger-primary) hover:bg-(--bg-layer-1-hover)"
                 onClick={() => {
-                  if (window.confirm(`Delete ${visibleSelectedIds.size} work item(s)?`))
+                  if (
+                    window.confirm(
+                      t('workItem.list.deleteConfirm', 'Delete {{count}} work item(s)?', {
+                        count: visibleSelectedIds.size,
+                      }),
+                    )
+                  )
                     void runBulk((s, p, ids) => issueService.bulkDelete(s, p, ids));
                 }}
               >
-                Delete
+                {t('common.delete', 'Delete')}
               </button>
               <button
                 type="button"
                 className="ml-auto rounded-(--radius-md) px-2 py-1 text-xs text-(--txt-tertiary) hover:text-(--txt-secondary)"
                 onClick={clearSelection}
               >
-                Clear
+                {t('common.clear', 'Clear')}
               </button>
               {bulkError && (
                 <span className="w-full text-xs text-(--txt-danger-primary)">{bulkError}</span>
@@ -855,7 +883,7 @@ export function IssueListPage() {
                 onClick={() => setSearchParams({ create: '1' })}
               >
                 <IconPlus />
-                New work item
+                {t('workItem.list.newWorkItem', 'New work item')}
               </button>
             </div>
           )}

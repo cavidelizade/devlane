@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { ChevronRight, Folder, FolderPlus, IterationCw, LayoutGrid, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -30,6 +31,7 @@ export function WorkspaceFavoritesTree({
   workspaceSlug: string;
   baseUrl: string;
 }) {
+  const { t } = useTranslation();
   const { favorites, updateFavorite, removeById, createFolder } =
     useWorkspaceFavorites(workspaceSlug);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -53,10 +55,10 @@ export function WorkspaceFavoritesTree({
     return (
       <button
         type="button"
-        onClick={() => void createFolder('New folder')}
+        onClick={() => void createFolder(t('nav.newFolder', 'New folder'))}
         className="flex w-full items-center gap-2 rounded-(--radius-md) px-2 py-1 text-[13px] text-(--txt-tertiary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary)"
       >
-        <FolderPlus className="size-3.5" /> New favorites folder
+        <FolderPlus className="size-3.5" /> {t('nav.newFavoritesFolder', 'New favorites folder')}
       </button>
     );
   }
@@ -129,7 +131,7 @@ export function WorkspaceFavoritesTree({
             </button>
             <button
               type="button"
-              aria-label="Delete folder"
+              aria-label={t('nav.deleteFolder', 'Delete folder')}
               onClick={() => void removeById(fav.id)}
               className="opacity-0 transition group-hover:opacity-100"
             >
@@ -161,7 +163,7 @@ export function WorkspaceFavoritesTree({
         </NavLink>
         <button
           type="button"
-          aria-label="Remove favorite"
+          aria-label={t('nav.removeFavorite', 'Remove favorite')}
           onClick={() => void removeById(fav.id)}
           className="opacity-0 transition group-hover:opacity-100"
         >
@@ -178,7 +180,7 @@ export function WorkspaceFavoritesTree({
       ))}
       <button
         type="button"
-        onClick={() => void createFolder('New folder')}
+        onClick={() => void createFolder(t('nav.newFolder', 'New folder'))}
         onDragOver={(e) => {
           if (dragId) e.preventDefault();
         }}
@@ -188,7 +190,7 @@ export function WorkspaceFavoritesTree({
         }}
         className="mt-0.5 flex items-center gap-2 rounded-(--radius-md) px-2 py-1 text-[13px] text-(--txt-tertiary) hover:bg-(--bg-layer-transparent-hover) hover:text-(--txt-secondary)"
       >
-        <FolderPlus className="size-3.5" /> New folder
+        <FolderPlus className="size-3.5" /> {t('nav.newFolder', 'New folder')}
       </button>
     </div>
   );

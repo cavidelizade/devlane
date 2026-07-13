@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Badge } from '../components/ui';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
@@ -38,11 +40,14 @@ const SNOOZE_PRESETS: { label: string; days: number }[] = [
   { label: '1 week', days: 7 },
 ];
 
-function sourceLabel(source: string): string {
-  return source === 'IN_APP' ? 'In-app' : source.replace(/_/g, ' ').toLowerCase();
+function sourceLabel(source: string, t: TFunction): string {
+  return source === 'IN_APP'
+    ? t('intake.source.inApp', 'In-app')
+    : source.replace(/_/g, ' ').toLowerCase();
 }
 
 export function IntakePage() {
+  const { t } = useTranslation();
   const { workspaceSlug, projectId } = useParams<{ workspaceSlug: string; projectId: string }>();
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<WorkspaceApiResponse | null>(null);
@@ -53,7 +58,29 @@ export function IntakePage() {
   const [activeIssues, setActiveIssues] = useState<IssueApiResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  useDocumentTitle('Intake');
+  useDocumentTitle(t('intake.documentTitle', 'Intake'));
+
+  const tabLabel = (key: TabKey): string => {
+    switch (key) {
+      case 'pending':
+        return t('intake.tabs.pending', 'Pending');
+      case 'snoozed':
+        return t('intake.tabs.snoozed', 'Snoozed');
+      case 'accepted':
+        return t('intake.tabs.accepted', 'Accepted');
+      case 'declined':
+        return t('intake.tabs.declined', 'Declined');
+      case 'duplicate':
+        return t('intake.tabs.duplicate', 'Duplicate');
+    }
+  };
+
+  const snoozeLabel = (days: number): string => {
+    if (days === 1) return t('intake.snooze.oneDay', '1 day');
+    if (days === 3) return t('intake.snooze.threeDays', '3 days');
+    if (days === 7) return t('intake.snooze.oneWeek', '1 week');
+    return t('intake.snooze.days', '{{count}} days', { count: days });
+  };
 
   const reloadPending = useCallback(() => {
     if (!workspaceSlug || !projectId) return;
@@ -126,15 +153,24 @@ export function IntakePage() {
       reloadPending();
       emitIntakeUpdated(projectId);
     } catch {
-      setError('That action could not be completed. Please try again.');
+      setError(t('intake.actionFailed', 'That action could not be completed. Please try again.'));
     } finally {
       setBusy(null);
     }
   };
 
-  if (loading) return <div className="p-6 text-sm text-(--txt-tertiary)">Loading intake…</div>;
+  if (loading)
+    return (
+      <div className="p-6 text-sm text-(--txt-tertiary)">
+        {t('intake.loading', 'Loading intake…')}
+      </div>
+    );
   if (!workspace || !project)
-    return <div className="p-6 text-sm text-(--txt-secondary)">Project not found.</div>;
+    return (
+      <div className="p-6 text-sm text-(--txt-secondary)">
+        {t('common.projectNotFound', 'Project not found.')}
+      </div>
+    );
 
   const baseUrl = `/${workspace.slug}/projects/${project.id}`;
   const identifier = project.identifier ?? project.id.slice(0, 6);
@@ -145,33 +181,38 @@ export function IntakePage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-(--txt-primary)">Intake</h1>
+          <h1 className="text-lg font-semibold text-(--txt-primary)">
+            {t('intake.title', 'Intake')}
+          </h1>
           <p className="text-sm text-(--txt-tertiary)">
-            Triage incoming work: accept it into the project, decline, snooze, or mark a duplicate.
+            {t(
+              'intake.subtitle',
+              'Triage incoming work: accept it into the project, decline, snooze, or mark a duplicate.',
+            )}
           </p>
         </div>
         <Link
           to={`${baseUrl}/issues`}
           className="rounded-(--radius-md) px-3 py-1.5 text-sm text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)"
         >
-          Active issues →
+          {t('intake.activeIssues', 'Active issues')} →
         </Link>
       </div>
 
       <div className="flex items-center gap-1 border-b border-(--border-subtle)">
-        {TABS.map((t) => (
+        {TABS.map((tb) => (
           <button
-            key={t.key}
+            key={tb.key}
             type="button"
-            onClick={() => selectTab(t.key)}
+            onClick={() => selectTab(tb.key)}
             className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
-              tab === t.key
+              tab === tb.key
                 ? 'border-(--brand-default) text-(--txt-primary)'
                 : 'border-transparent text-(--txt-secondary) hover:text-(--txt-primary)'
             }`}
           >
-            {t.label}
-            {t.key === 'pending' && pendingCount > 0 && (
+            {tabLabel(tb.key)}
+            {tb.key === 'pending' && pendingCount > 0 && (
               <span className="rounded-full bg-(--brand-default) px-1.5 text-xs text-white">
                 {pendingCount}
               </span>
@@ -188,24 +229,32 @@ export function IntakePage() {
 
       {items.length === 0 ? (
         <div className="rounded-md border border-(--border-subtle) bg-(--bg-surface-1) p-8 text-center text-sm text-(--txt-tertiary)">
-          Nothing here. This triage queue is empty.
+          {t('intake.empty', 'Nothing here. This triage queue is empty.')}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border border-(--border-subtle) bg-(--bg-surface-1)">
           <table className="w-full text-left text-sm">
             <thead className="bg-(--bg-layer-1)">
               <tr>
-                <th className="px-4 py-2 font-medium text-(--txt-secondary)">Work item</th>
-                <th className="px-4 py-2 font-medium text-(--txt-secondary)">Source</th>
-                <th className="px-4 py-2 font-medium text-(--txt-secondary)">Priority</th>
+                <th className="px-4 py-2 font-medium text-(--txt-secondary)">
+                  {t('intake.column.workItem', 'Work item')}
+                </th>
+                <th className="px-4 py-2 font-medium text-(--txt-secondary)">
+                  {t('intake.column.source', 'Source')}
+                </th>
+                <th className="px-4 py-2 font-medium text-(--txt-secondary)">
+                  {t('intake.column.priority', 'Priority')}
+                </th>
                 <th className="px-4 py-2 font-medium text-(--txt-secondary)">
                   {tab === 'snoozed'
-                    ? 'Snoozed until'
+                    ? t('intake.column.snoozedUntil', 'Snoozed until')
                     : tab === 'duplicate'
-                      ? 'Duplicate of'
-                      : 'Created'}
+                      ? t('intake.column.duplicateOf', 'Duplicate of')
+                      : t('intake.column.created', 'Created')}
                 </th>
-                <th className="px-4 py-2 font-medium text-(--txt-secondary)">Actions</th>
+                <th className="px-4 py-2 font-medium text-(--txt-secondary)">
+                  {t('intake.column.actions', 'Actions')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -226,7 +275,7 @@ export function IntakePage() {
                       </Link>
                     </td>
                     <td className="px-4 py-2 text-xs text-(--txt-tertiary)">
-                      {sourceLabel(item.source)}
+                      {sourceLabel(item.source, t)}
                     </td>
                     <td className="px-4 py-2">
                       {issue.priority && issue.priority !== 'none' ? (
@@ -259,7 +308,7 @@ export function IntakePage() {
                             }
                             className="rounded-(--radius-md) bg-(--bg-success-subtle) px-2 py-1 text-xs font-medium text-(--txt-success-primary) hover:opacity-90 disabled:opacity-50"
                           >
-                            Accept
+                            {t('intake.action.accept', 'Accept')}
                           </button>
                           <button
                             type="button"
@@ -271,10 +320,10 @@ export function IntakePage() {
                             }
                             className="rounded-(--radius-md) bg-(--bg-danger-subtle) px-2 py-1 text-xs font-medium text-(--txt-danger-primary) hover:opacity-90 disabled:opacity-50"
                           >
-                            Decline
+                            {t('intake.action.decline', 'Decline')}
                           </button>
                           <select
-                            aria-label="Snooze"
+                            aria-label={t('intake.action.snooze', 'Snooze')}
                             disabled={busy === item.id}
                             value=""
                             onChange={(e) => {
@@ -288,15 +337,17 @@ export function IntakePage() {
                             }}
                             className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-1.5 py-1 text-xs text-(--txt-secondary)"
                           >
-                            <option value="">Snooze…</option>
+                            <option value="">
+                              {t('intake.action.snoozePlaceholder', 'Snooze…')}
+                            </option>
                             {SNOOZE_PRESETS.map((p) => (
                               <option key={p.days} value={p.days}>
-                                {p.label}
+                                {snoozeLabel(p.days)}
                               </option>
                             ))}
                           </select>
                           <select
-                            aria-label="Mark duplicate"
+                            aria-label={t('intake.action.markDuplicate', 'Mark duplicate')}
                             disabled={busy === item.id}
                             value=""
                             onChange={(e) => {
@@ -314,7 +365,9 @@ export function IntakePage() {
                             }}
                             className="max-w-[9rem] rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1) px-1.5 py-1 text-xs text-(--txt-secondary)"
                           >
-                            <option value="">Duplicate of…</option>
+                            <option value="">
+                              {t('intake.action.duplicateOfPlaceholder', 'Duplicate of…')}
+                            </option>
                             {activeIssues.map((i) => (
                               <option key={i.id} value={i.id}>
                                 {identifier}-{i.sequence_id} {i.name}
