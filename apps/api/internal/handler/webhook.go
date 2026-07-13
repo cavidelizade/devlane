@@ -70,7 +70,24 @@ func (h *WebhookHandler) Create(c *gin.Context) {
 		h.webhookError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, w)
+	// The signing secret is returned exactly once, here at creation. Every other
+	// response omits it (model.Webhook.SecretKey is json:"-"), so it never leaks
+	// on subsequent list/update fetches.
+	c.JSON(http.StatusCreated, gin.H{
+		"id":            w.ID,
+		"url":           w.URL,
+		"secret_key":    w.SecretKey,
+		"is_active":     w.IsActive,
+		"project":       w.Project,
+		"issue":         w.Issue,
+		"module":        w.Module,
+		"cycle":         w.Cycle,
+		"issue_comment": w.IssueComment,
+		"version":       w.Version,
+		"workspace_id":  w.WorkspaceID,
+		"created_at":    w.CreatedAt,
+		"updated_at":    w.UpdatedAt,
+	})
 }
 
 // Update edits a webhook.

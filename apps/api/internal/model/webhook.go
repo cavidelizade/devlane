@@ -12,7 +12,7 @@ import (
 type Webhook struct {
 	ID           uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	URL          string         `gorm:"type:varchar(1024);not null" json:"url"`
-	SecretKey    string         `gorm:"column:secret_key;type:varchar(255)" json:"secret_key,omitempty"`
+	SecretKey    string         `gorm:"column:secret_key;type:varchar(255)" json:"-"`
 	IsActive     bool           `gorm:"column:is_active;not null;default:true" json:"is_active"`
 	Project      bool           `gorm:"column:project;not null;default:false" json:"project"`
 	Issue        bool           `gorm:"column:issue;not null;default:false" json:"issue"`

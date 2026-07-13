@@ -56,12 +56,16 @@ func NewWebhookDeliverer(webhooks *store.WebhookStore, log *slog.Logger) func(ct
 			sig = "sha256=" + hex.EncodeToString(mac.Sum(nil))
 		}
 
+		// One delivery ID for the whole delivery, stable across retries, so
+		// receivers can dedupe: retrying an attempt must not look like a new event.
+		deliveryID := uuid.New().String()
+
 		var lastErr error
 		var status, respHeaders, respBody string
 		attempts := 0
 		for attempts < webhookMaxAttempts {
 			attempts++
-			status, respHeaders, respBody, lastErr = deliverOnce(ctx, client, p, body, sig)
+			status, respHeaders, respBody, lastErr = deliverOnce(ctx, client, p, body, sig, deliveryID)
 			if lastErr == nil && strings.HasPrefix(status, "2") {
 				break
 			}
@@ -70,12 +74,12 @@ func NewWebhookDeliverer(webhooks *store.WebhookStore, log *slog.Logger) func(ct
 			}
 		}
 
-		writeWebhookLog(ctx, webhooks, log, p, body, sig, status, respHeaders, respBody, attempts-1, lastErr)
+		writeWebhookLog(ctx, webhooks, log, p, body, sig, deliveryID, status, respHeaders, respBody, attempts-1, lastErr)
 		return nil // delivery is best-effort; failures are recorded, not retried by the queue
 	}
 }
 
-func deliverOnce(ctx context.Context, client *http.Client, p queue.WebhookPayload, body []byte, sig string) (status, respHeaders, respBody string, err error) {
+func deliverOnce(ctx context.Context, client *http.Client, p queue.WebhookPayload, body []byte, sig, deliveryID string) (status, respHeaders, respBody string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.URL, bytes.NewReader(body))
 	if err != nil {
 		return "", "", "", err
@@ -83,7 +87,7 @@ func deliverOnce(ctx context.Context, client *http.Client, p queue.WebhookPayloa
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Devlane-Webhook/"+"v1")
 	req.Header.Set("X-Devlane-Event", p.Event)
-	req.Header.Set("X-Devlane-Delivery", uuid.New().String())
+	req.Header.Set("X-Devlane-Delivery", deliveryID)
 	if sig != "" {
 		req.Header.Set("X-Devlane-Signature", sig)
 	}
@@ -96,7 +100,7 @@ func deliverOnce(ctx context.Context, client *http.Client, p queue.WebhookPayloa
 	return fmt.Sprintf("%d", resp.StatusCode), headerString(resp.Header), string(rb), nil
 }
 
-func writeWebhookLog(ctx context.Context, webhooks *store.WebhookStore, log *slog.Logger, p queue.WebhookPayload, body []byte, sig, status, respHeaders, respBody string, retries int, deliverErr error) {
+func writeWebhookLog(ctx context.Context, webhooks *store.WebhookStore, log *slog.Logger, p queue.WebhookPayload, body []byte, sig, deliveryID, status, respHeaders, respBody string, retries int, deliverErr error) {
 	whID, err1 := uuid.Parse(p.WebhookID)
 	wsID, err2 := uuid.Parse(p.WorkspaceID)
 	if err1 != nil || err2 != nil || webhooks == nil {
@@ -105,7 +109,8 @@ func writeWebhookLog(ctx context.Context, webhooks *store.WebhookStore, log *slo
 	if status == "" && deliverErr != nil {
 		status = "error: " + deliverErr.Error()
 	}
-	reqHeaders := "Content-Type: application/json\nX-Devlane-Event: " + p.Event
+	reqHeaders := "Content-Type: application/json\nX-Devlane-Event: " + p.Event +
+		"\nX-Devlane-Delivery: " + deliveryID
 	if sig != "" {
 		reqHeaders += "\nX-Devlane-Signature: " + sig
 	}
@@ -164,6 +169,11 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 func isPublicIP(ip net.IP) bool {
 	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsPrivate() {
+		return false
+	}
+	// Block CGNAT shared address space (RFC 6598, 100.64.0.0/10), which
+	// ip.IsPrivate() does not cover but some providers use for internal services.
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
 		return false
 	}
 	return true

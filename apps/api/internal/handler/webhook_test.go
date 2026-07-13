@@ -25,12 +25,14 @@ func TestWebhook_CRUD(t *testing.T) {
 	require.NotEmpty(t, created["secret_key"], "a secret should be generated")
 	require.Equal(t, true, created["issue"])
 
-	// List includes it.
+	// List includes the webhook but never the secret: it is returned only once,
+	// at creation.
 	lr := ts.GET(base, w.Session)
 	require.Equal(t, http.StatusOK, lr.Code)
 	var list []map[string]any
 	require.NoError(t, json.Unmarshal(lr.Body.Bytes(), &list))
 	require.Len(t, list, 1)
+	require.NotContains(t, list[0], "secret_key", "the secret must not leak on list")
 
 	// Toggle it off.
 	ur := ts.PATCH(base+id+"/", map[string]any{"is_active": false}, w.Session)
