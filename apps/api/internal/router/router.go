@@ -322,6 +322,7 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/workspaces/:slug/projects/join/", projectHandler.JoinByToken)
 		api.GET("/workspaces/:slug/draft-issues/", issueHandler.ListWorkspaceDrafts)
 		api.GET("/workspaces/:slug/archived-issues/", issueHandler.ListWorkspaceArchived)
+		api.GET("/workspaces/:slug/archived-projects/", projectHandler.ListArchived)
 		api.GET("/workspaces/:slug/search/", searchHandler.Search)
 
 		api.GET("/workspaces/:slug/projects/", projectHandler.List)
@@ -329,6 +330,8 @@ func New(cfg Config) *gin.Engine {
 		api.GET("/workspaces/:slug/projects/:projectId/", projectHandler.Get)
 		api.PATCH("/workspaces/:slug/projects/:projectId/", projectHandler.Update)
 		api.DELETE("/workspaces/:slug/projects/:projectId/", projectHandler.Delete)
+		api.POST("/workspaces/:slug/projects/:projectId/archive/", projectHandler.Archive)
+		api.DELETE("/workspaces/:slug/projects/:projectId/archive/", projectHandler.Restore)
 		api.POST("/workspaces/:slug/projects/:projectId/favorite", favoriteHandler.AddFavoriteProject)
 		api.DELETE("/workspaces/:slug/projects/:projectId/favorite", favoriteHandler.RemoveFavoriteProject)
 		api.GET("/workspaces/:slug/projects/:projectId/members/", projectHandler.ListMembers)
