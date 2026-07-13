@@ -32,6 +32,11 @@ export function ImportCSVModal({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const notifiedRef = useRef(false);
+  // Held in a ref so the poll effect below doesn't depend on onImported's
+  // identity — the parent passes a fresh function each render, which would
+  // otherwise tear down and restart the 1s poll timer on every re-render.
+  const onImportedRef = useRef(onImported);
+  onImportedRef.current = onImported;
 
   // Reset when the modal is (re)opened.
   useEffect(() => {
@@ -49,7 +54,7 @@ export function ImportCSVModal({
     if (!job || isTerminal(job.status)) {
       if (job && isTerminal(job.status) && !notifiedRef.current) {
         notifiedRef.current = true;
-        onImported?.();
+        onImportedRef.current?.();
       }
       return;
     }
@@ -66,7 +71,7 @@ export function ImportCSVModal({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [job, workspaceSlug, projectId, onImported]);
+  }, [job, workspaceSlug, projectId]);
 
   const handleUpload = async () => {
     if (!file) return;

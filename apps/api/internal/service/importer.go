@@ -106,17 +106,24 @@ func (s *ImporterService) CreateCSV(ctx context.Context, slug string, projectID,
 		return nil, err
 	}
 
+	ranInline := false
 	if s.queue != nil {
 		if err := s.queue.PublishImport(ctx, queue.ImportPayload{ImporterID: im.ID.String()}); err != nil {
 			if s.log != nil {
 				s.log.Warn("import enqueue failed, running inline", "importer_id", im.ID, "error", err)
 			}
-			s.Run(ctx, im.ID.String())
+			_ = s.Run(ctx, im.ID.String())
+			ranInline = true
 		}
 	} else {
 		// No queue available (optional infra): process synchronously so the
-		// feature still works, then return the finished job.
-		s.Run(ctx, im.ID.String())
+		// feature still works.
+		_ = s.Run(ctx, im.ID.String())
+		ranInline = true
+	}
+	// When processed inline, return the finished job so the caller sees the real
+	// status/counts instead of the initial "queued" snapshot.
+	if ranInline {
 		if fresh, _ := s.importers.Get(ctx, im.ID); fresh != nil {
 			return fresh, nil
 		}
@@ -155,11 +162,24 @@ func (s *ImporterService) Run(ctx context.Context, importerID string) error {
 		return err
 	}
 	im, err := s.importers.Get(ctx, id)
-	if err != nil || im == nil {
+	if err != nil {
 		return err
 	}
-	if im.Status == model.ImportStatusCompleted || im.Status == model.ImportStatusPartial {
-		return nil // already done; avoid double-processing on redelivery
+	if im == nil {
+		// The importer row is gone (deleted, or a stale queue message). Nothing
+		// to process; log so it isn't silently swallowed, but ack the message.
+		if s.log != nil {
+			s.log.Warn("import run: importer not found", "importer_id", importerID)
+		}
+		return nil
+	}
+	// Skip anything already finished OR in-flight: on a redelivered message an
+	// import left in "processing" (e.g. a mid-run crash) must not be replayed
+	// from row zero, which would create duplicate issues.
+	if im.Status == model.ImportStatusCompleted ||
+		im.Status == model.ImportStatusPartial ||
+		im.Status == model.ImportStatusProcessing {
+		return nil
 	}
 	if im.ProjectID == nil {
 		im.Status = model.ImportStatusFailed
