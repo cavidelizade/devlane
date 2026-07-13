@@ -95,7 +95,7 @@ func main() {
 		mc = client
 	}
 
-	r := router.New(router.Config{
+	r, importerSvc := router.New(router.Config{
 		Log:               log,
 		DB:                db,
 		Redis:             rdb,
@@ -120,7 +120,8 @@ func main() {
 			consumer.Register(queue.QueueEmails, queue.HandleSendEmail(log, emailSender))
 			webhookDeliverer := service.NewWebhookDeliverer(store.NewWebhookStore(db), log)
 			consumer.Register(queue.QueueWebhooks, queue.HandleWebhook(webhookDeliverer))
-			if err := consumer.Run(consumerCtx, []string{queue.QueueEmails, queue.QueueWebhooks}); err != nil {
+			consumer.Register(queue.QueueImports, queue.HandleImport(importerSvc.Run))
+			if err := consumer.Run(consumerCtx, []string{queue.QueueEmails, queue.QueueWebhooks, queue.QueueImports}); err != nil {
 				log.Warn("queue consumer", "error", err)
 			}
 		}

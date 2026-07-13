@@ -356,6 +356,22 @@ export interface FavoriteApiResponse {
   updated_at?: string;
 }
 
+/** A bulk-import job (e.g. CSV) for a project. */
+export interface ImporterApiResponse {
+  id: string;
+  service: string;
+  status: 'queued' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
+  total_count: number;
+  processed_count: number;
+  error_count: number;
+  error_message?: string;
+  source_filename?: string;
+  project_id?: string;
+  workspace_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /** An outbound workspace webhook. */
 export interface WebhookApiResponse {
   id: string;
