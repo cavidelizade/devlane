@@ -118,7 +118,8 @@ func main() {
 			instanceSettingStore := store.NewInstanceSettingStore(db)
 			emailSender := mail.NewSMTPEmailSender(instanceSettingStore, log)
 			consumer.Register(queue.QueueEmails, queue.HandleSendEmail(log, emailSender))
-			consumer.Register(queue.QueueWebhooks, queue.HandleWebhook(queue.NoopWebhookDeliverer(log)))
+			webhookDeliverer := service.NewWebhookDeliverer(store.NewWebhookStore(db), log)
+			consumer.Register(queue.QueueWebhooks, queue.HandleWebhook(webhookDeliverer))
 			if err := consumer.Run(consumerCtx, []string{queue.QueueEmails, queue.QueueWebhooks}); err != nil {
 				log.Warn("queue consumer", "error", err)
 			}
