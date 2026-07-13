@@ -110,6 +110,8 @@ export interface ProjectApiResponse {
   archive_in?: number;
   /** Auto-close: months of inactivity after which active items are closed (0 = off). */
   close_in?: number;
+  /** Set when the project is archived; absent/null for active projects. */
+  archived_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

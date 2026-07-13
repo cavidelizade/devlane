@@ -25,6 +25,8 @@ export function ArchivesPage() {
 
   const [issues, setIssues] = useState<IssueApiResponse[]>([]);
   const [projects, setProjects] = useState<ProjectApiResponse[]>([]);
+  const [archivedProjects, setArchivedProjects] = useState<ProjectApiResponse[]>([]);
+  const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -43,14 +45,16 @@ export function ArchivesPage() {
       // Fetch one extra to detect whether more pages exist.
       issueService.listWorkspaceArchived(workspaceSlug, { limit: ARCHIVES_PAGE_SIZE + 1 }),
       projectService.list(workspaceSlug).catch(() => [] as ProjectApiResponse[]),
+      projectService.listArchived(workspaceSlug).catch(() => [] as ProjectApiResponse[]),
     ])
-      .then(([archived, projs]) => {
+      .then(([archived, projs, archProjs]) => {
         if (cancelled) return;
         const page = archived.slice(0, ARCHIVES_PAGE_SIZE);
         setHasMore(archived.length > ARCHIVES_PAGE_SIZE);
         setIssues(page);
         setFetchedCount(page.length);
         setProjects(projs ?? []);
+        setArchivedProjects(archProjs ?? []);
         setError(null);
       })
       .catch(() => {
@@ -102,6 +106,19 @@ export function ArchivesPage() {
     }
   };
 
+  const restoreProject = async (project: ProjectApiResponse) => {
+    if (!workspaceSlug || restoringProjectId) return;
+    setRestoringProjectId(project.id);
+    try {
+      await projectService.restore(workspaceSlug, project.id);
+      setArchivedProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch {
+      setError('Could not restore that project.');
+    } finally {
+      setRestoringProjectId(null);
+    }
+  };
+
   const displayId = (issue: IssueApiResponse) => {
     const p = projectById.get(issue.project_id);
     const prefix = p?.identifier ?? p?.id.slice(0, 8) ?? issue.project_id.slice(0, 8);
@@ -121,6 +138,36 @@ export function ArchivesPage() {
         <p className="rounded-(--radius-md) bg-(--bg-danger-subtle) px-3 py-2 text-sm text-(--txt-danger-primary)">
           {error}
         </p>
+      )}
+
+      {!loading && archivedProjects.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-(--txt-secondary)">Archived projects</h2>
+          <ul className="divide-y divide-(--border-subtle) overflow-hidden rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1)">
+            {archivedProjects.map((project) => (
+              <li
+                key={project.id}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-(--bg-layer-1-hover)"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium text-(--txt-primary)">
+                  {project.name}
+                </span>
+                <span className="shrink-0 text-xs text-(--txt-tertiary)">
+                  Archived {formatArchivedAt(project.archived_at)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void restoreProject(project)}
+                  disabled={restoringProjectId === project.id}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-md) border border-(--border-subtle) px-2 py-1 text-xs text-(--txt-secondary) transition-colors hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary) disabled:opacity-50"
+                >
+                  <ArchiveRestore className="size-3.5" />
+                  {restoringProjectId === project.id ? 'Restoring…' : 'Restore'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {loading ? (

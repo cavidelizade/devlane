@@ -457,6 +457,7 @@ export function SettingsPage() {
   const [projectMembersSearch, setProjectMembersSearch] = useState('');
   const [projectUpdateLoading, setProjectUpdateLoading] = useState(false);
   const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
+  const [archivingProject, setArchivingProject] = useState(false);
   const [inviteTarget, setInviteTarget] = useState<'workspace' | 'project' | null>(null);
   const [projectLabelModalOpen, setProjectLabelModalOpen] = useState(false);
   const [projectLabelEdit, setProjectLabelEdit] = useState<LabelApiResponse | null>(null);
@@ -2000,6 +2001,36 @@ export function SettingsPage() {
                     year: 'numeric',
                   })}
                 </p>
+              )}
+              {workspaceSlug && selectedProjectId && (
+                <div className="mt-4 flex items-center justify-between gap-4 rounded-(--radius-md) border border-(--border-subtle) px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-(--txt-primary)">Archive project</p>
+                    <p className="mt-0.5 text-sm text-(--txt-secondary)">
+                      Hide this project and its work from the workspace. You can restore it later
+                      from Archives.
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="shrink-0 text-(--txt-danger-primary)"
+                    disabled={archivingProject}
+                    onClick={async () => {
+                      if (!workspaceSlug || !selectedProjectId) return;
+                      setArchivingProject(true);
+                      try {
+                        await projectService.archive(workspaceSlug, selectedProjectId);
+                        setProjects((prev) => prev.filter((p) => p.id !== selectedProjectId));
+                        navigate(`/${workspaceSlug}`);
+                      } catch {
+                        setProjectUpdateError('Failed to archive project.');
+                        setArchivingProject(false);
+                      }
+                    }}
+                  >
+                    {archivingProject ? 'Archiving…' : 'Archive project'}
+                  </Button>
+                </div>
               )}
               {workspaceSlug && selectedProjectId && (
                 <>
