@@ -49,23 +49,25 @@ func (s *UserFavoriteStore) GetOwnedByID(ctx context.Context, userID, id uuid.UU
 	return &f, nil
 }
 
-// AddEntity favorites an entity (cycle/module/…), returning the existing row if
-// it's already favorited so the call is idempotent.
+// AddEntity favorites an entity (cycle/module/…) idempotently: an insert that
+// races another request for the same (user, entity_type, entity_identifier) is
+// a no-op, and the caller always gets the persisted row back.
 func (s *UserFavoriteStore) AddEntity(ctx context.Context, f *model.UserFavorite) (*model.UserFavorite, error) {
-	var existing model.UserFavorite
-	err := s.db.WithContext(ctx).
+	if err := s.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "entity_type"}, {Name: "entity_identifier"}},
+			DoNothing: true,
+		}).
+		Create(f).Error; err != nil {
+		return nil, err
+	}
+	var row model.UserFavorite
+	if err := s.db.WithContext(ctx).
 		Where("user_id = ? AND entity_type = ? AND entity_identifier = ?", f.UserID, f.EntityType, f.EntityIdentifier).
-		First(&existing).Error
-	if err == nil {
-		return &existing, nil
-	}
-	if err != gorm.ErrRecordNotFound {
+		First(&row).Error; err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).Create(f).Error; err != nil {
-		return nil, err
-	}
-	return f, nil
+	return &row, nil
 }
 
 // CreateFolder inserts a folder favorite. Folders carry a synthetic

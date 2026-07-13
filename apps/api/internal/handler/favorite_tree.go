@@ -156,7 +156,7 @@ func (h *FavoriteHandler) favError(c *gin.Context, err error) {
 	switch err {
 	case service.ErrFavoriteWorkspace, service.ErrFavoriteForbidden, service.ErrFavoriteNotFound:
 		c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
-	case service.ErrFavoriteBadEntity, service.ErrFavoriteBadParent:
+	case service.ErrFavoriteBadEntity, service.ErrFavoriteBadParent, service.ErrFavoriteBadName:
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Favorites request failed"})

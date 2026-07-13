@@ -79,6 +79,16 @@ func TestFavorites_CycleFolderOrdering(t *testing.T) {
 	require.Len(t, favList(t, ts.GET(base, w.Session).Body.String()), 0)
 }
 
+// An empty name is rejected for both folders and entity favorites.
+func TestFavorites_EmptyNameRejected(t *testing.T) {
+	ts := testutil.NewTestServer(t)
+	w := testutil.SeedWorld(t, ts.DB)
+	base := "/api/workspaces/" + w.Workspace.Slug + "/favorites/"
+
+	rr := ts.POST(base, map[string]any{"is_folder": true, "name": "   "}, w.Session)
+	require.Equal(t, http.StatusBadRequest, rr.Code, "body=%s", rr.Body.String())
+}
+
 // A non-member can't read a workspace's favorites.
 func TestFavorites_NonMemberForbidden(t *testing.T) {
 	ts := testutil.NewTestServer(t)

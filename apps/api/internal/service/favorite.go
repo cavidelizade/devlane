@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/Devlaner/devlane/api/internal/model"
 	"github.com/Devlaner/devlane/api/internal/store"
@@ -13,6 +14,7 @@ var (
 	ErrFavoriteNotFound    = errors.New("favorite not found")
 	ErrFavoriteBadEntity   = errors.New("unsupported favorite entity type")
 	ErrFavoriteBadParent   = errors.New("parent must be one of your folders")
+	ErrFavoriteBadName     = errors.New("name is required")
 	ErrFavoriteWorkspace   = errors.New("workspace not found")
 	ErrFavoriteForbidden   = errors.New("no access to this workspace")
 	favoriteEntityTypesSet = map[string]bool{
@@ -38,7 +40,10 @@ func (s *FavoriteService) workspace(ctx context.Context, slug string, userID uui
 	if err != nil {
 		return nil, ErrFavoriteWorkspace
 	}
-	ok, _ := s.ws.IsMember(ctx, wrk.ID, userID)
+	ok, err := s.ws.IsMember(ctx, wrk.ID, userID)
+	if err != nil {
+		return nil, err // surface infra failures as 500, not 404
+	}
 	if !ok {
 		return nil, ErrFavoriteForbidden
 	}
@@ -60,13 +65,21 @@ func (s *FavoriteService) AddEntity(ctx context.Context, slug string, userID uui
 	if !favoriteEntityTypesSet[entityType] {
 		return nil, ErrFavoriteBadEntity
 	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrFavoriteBadName
+	}
 	wrk, err := s.workspace(ctx, slug, userID)
 	if err != nil {
 		return nil, err
 	}
-	// Confirm the caller can see the project the entity lives in.
-	if _, err := s.projects.GetByID(ctx, slug, projectID, userID); err != nil {
-		return nil, ErrFavoriteForbidden
+	// Confirm the caller can see the project the entity lives in. Access errors
+	// map to forbidden; anything else (infra) propagates as a 500.
+	if _, gerr := s.projects.GetByID(ctx, slug, projectID, userID); gerr != nil {
+		if gerr == ErrProjectNotFound || gerr == ErrProjectForbidden {
+			return nil, ErrFavoriteForbidden
+		}
+		return nil, gerr
 	}
 	pid := projectID
 	fav := &model.UserFavorite{
@@ -96,6 +109,10 @@ func (s *FavoriteService) RemoveEntity(ctx context.Context, slug string, userID 
 
 // CreateFolder makes a new folder to group favorites under.
 func (s *FavoriteService) CreateFolder(ctx context.Context, slug string, userID uuid.UUID, name string) (*model.UserFavorite, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrFavoriteBadName
+	}
 	wrk, err := s.workspace(ctx, slug, userID)
 	if err != nil {
 		return nil, err
