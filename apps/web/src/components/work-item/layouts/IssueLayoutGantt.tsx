@@ -11,6 +11,8 @@ const DAY_MS = 24 * 3600 * 1000;
 // Zoom levels: pixels per day. The middle value matches the previous fixed size.
 const ZOOM_LEVELS = [14, 20, 28, 40, 56];
 const DEFAULT_ZOOM = 2;
+// Pointer movement (px) beyond which a gesture counts as a drag, not a click.
+const DRAG_THRESHOLD_PX = 4;
 
 type DragMode = 'move' | 'start' | 'end';
 interface DragState {
@@ -92,21 +94,29 @@ export function IssueLayoutGantt({
   // without re-subscribing), mirrored into state so the render — which must not
   // read a ref — can preview the bar's new position.
   const dragRef = useRef<DragState | null>(null);
-  const suppressClickRef = useRef(false);
   const [dragPreview, setDragPreview] = useState<{
     id: string;
     mode: DragMode;
     deltaDays: number;
   } | null>(null);
+  // issueHref is captured in a ref so the pointer-up navigation doesn't force the
+  // window listeners to re-subscribe when the prop's identity changes.
+  const issueHrefRef = useRef(issueHref);
+  useEffect(() => {
+    issueHrefRef.current = issueHref;
+  }, [issueHref]);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
+      // "moved" is a pixel threshold on the whole gesture, independent of the
+      // day-snap, so a small drag is still treated as a drag (not a click) and
+      // a sub-day drag doesn't navigate.
+      if (Math.abs(e.clientX - d.startClientX) > DRAG_THRESHOLD_PX) d.moved = true;
       const deltaDays = Math.round((e.clientX - d.startClientX) / dayPx);
       if (deltaDays !== d.deltaDays) {
         d.deltaDays = deltaDays;
-        if (deltaDays !== 0) d.moved = true;
         setDragPreview({ id: d.id, mode: d.mode, deltaDays });
       }
     };
@@ -115,7 +125,7 @@ export function IssueLayoutGantt({
       if (!d) return;
       dragRef.current = null;
       if (d.moved) {
-        suppressClickRef.current = true; // don't navigate on the drag-release click
+        // A real drag: commit the reschedule (if it landed on a different day).
         if (onUpdateIssue && d.deltaDays !== 0) {
           const { start, end } = applyDragDelta(d.mode, d.deltaDays, d.origStart, d.origEnd);
           const patch: { start_date?: string; target_date?: string } = {};
@@ -123,6 +133,10 @@ export function IssueLayoutGantt({
           if (d.mode !== 'start') patch.target_date = fmtDay(end);
           onUpdateIssue(d.id, patch);
         }
+      } else {
+        // A click (no meaningful movement): open the work item. Handling it here,
+        // in the same gesture, avoids a lingering suppress-click flag.
+        navigate(issueHrefRef.current(d.id));
       }
       setDragPreview(null);
     };
@@ -132,7 +146,7 @@ export function IssueLayoutGantt({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [dayPx, onUpdateIssue]);
+  }, [dayPx, onUpdateIssue, navigate]);
 
   const beginDrag = (e: React.PointerEvent, issue: IssueApiResponse, mode: DragMode) => {
     if (!canEdit || e.button !== 0) return;
@@ -291,55 +305,57 @@ export function IssueLayoutGantt({
                     start = preview.start;
                     end = preview.end;
                   }
-                  const offset = Math.max(0, Math.round((start - viewWindow.start) / DAY_MS));
-                  const span = Math.max(1, Math.round((end - start) / DAY_MS) + 1);
+                  // Intersect the bar with the visible window. A bar with no
+                  // overlap renders as an empty row (keeping alignment with the
+                  // sidebar) rather than being pinned to the first column.
+                  const visible = end >= viewWindow.start && start <= viewWindow.end;
+                  const clippedStart = Math.max(start, viewWindow.start);
+                  const clippedEnd = Math.min(end, viewWindow.end);
+                  const offset = Math.round((clippedStart - viewWindow.start) / DAY_MS);
+                  const span = Math.max(1, Math.round((clippedEnd - clippedStart) / DAY_MS) + 1);
                   const state = issue.state_id ? (stateById.get(issue.state_id) ?? null) : null;
                   const color = state?.color || '#6b7280';
                   return (
                     <li key={issue.id} className="relative h-8 border-b border-(--border-subtle)">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onPointerDown={canEdit ? (e) => beginDrag(e, issue, 'move') : undefined}
-                        onClick={() => {
-                          if (suppressClickRef.current) {
-                            suppressClickRef.current = false;
-                            return;
-                          }
-                          navigate(issueHref(issue.id));
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            navigate(issueHref(issue.id));
-                          }
-                        }}
-                        className={`absolute top-1.5 flex h-5 items-center overflow-hidden rounded-(--radius-md) text-[11px] font-medium text-white shadow-sm transition-opacity ${
-                          dragging ? 'opacity-90' : 'hover:opacity-80'
-                        } ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
-                        style={{
-                          left: `${offset * dayPx + 2}px`,
-                          width: `${span * dayPx - 4}px`,
-                          backgroundColor: color,
-                        }}
-                        title={`${issue.name} · ${fmtDay(start)} → ${fmtDay(end)}`}
-                      >
-                        {canEdit && (
-                          <span
-                            onPointerDown={(e) => beginDrag(e, issue, 'start')}
-                            className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-black/15 opacity-0 hover:opacity-100"
-                            aria-hidden
-                          />
-                        )}
-                        <span className="truncate px-2">{issue.name}</span>
-                        {canEdit && (
-                          <span
-                            onPointerDown={(e) => beginDrag(e, issue, 'end')}
-                            className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-black/15 opacity-0 hover:opacity-100"
-                            aria-hidden
-                          />
-                        )}
-                      </div>
+                      {visible && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onPointerDown={canEdit ? (e) => beginDrag(e, issue, 'move') : undefined}
+                          onClick={canEdit ? undefined : () => navigate(issueHref(issue.id))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              navigate(issueHref(issue.id));
+                            }
+                          }}
+                          className={`absolute top-1.5 flex h-5 items-center overflow-hidden rounded-(--radius-md) text-[11px] font-medium text-white shadow-sm transition-opacity ${
+                            dragging ? 'opacity-90' : 'hover:opacity-80'
+                          } ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+                          style={{
+                            left: `${offset * dayPx + 2}px`,
+                            width: `${span * dayPx - 4}px`,
+                            backgroundColor: color,
+                          }}
+                          title={`${issue.name} · ${fmtDay(start)} → ${fmtDay(end)}`}
+                        >
+                          {canEdit && (
+                            <span
+                              onPointerDown={(e) => beginDrag(e, issue, 'start')}
+                              className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-black/15 opacity-0 hover:opacity-100"
+                              aria-hidden
+                            />
+                          )}
+                          <span className="truncate px-2">{issue.name}</span>
+                          {canEdit && (
+                            <span
+                              onPointerDown={(e) => beginDrag(e, issue, 'end')}
+                              className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-black/15 opacity-0 hover:opacity-100"
+                              aria-hidden
+                            />
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
