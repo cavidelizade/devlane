@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SavedViewGroupBy, SavedViewOrderBy } from '../../lib/projectSavedViewDisplay';
 import {
   ALL_SAVED_VIEW_DISPLAY_PROPERTIES,
@@ -52,27 +53,6 @@ const IconCheck = () => (
 );
 
 type SectionId = 'properties' | 'group' | 'subgroup' | 'order';
-
-/** Order matches the work-items Display reference. */
-const GROUP_OPTIONS: { value: SavedViewGroupBy; label: string }[] = [
-  { value: 'states', label: 'States' },
-  { value: 'priority', label: 'Priority' },
-  { value: 'cycle', label: 'Cycle' },
-  { value: 'module', label: 'Module' },
-  { value: 'labels', label: 'Labels' },
-  { value: 'assignees', label: 'Assignees' },
-  { value: 'created_by', label: 'Created by' },
-  { value: 'none', label: 'None' },
-];
-
-const ORDER_OPTIONS: { value: SavedViewOrderBy; label: string }[] = [
-  { value: 'manual', label: 'Manual' },
-  { value: 'last_created', label: 'Last created' },
-  { value: 'last_updated', label: 'Last updated' },
-  { value: 'start_date', label: 'Start date' },
-  { value: 'due_date', label: 'Due date' },
-  { value: 'priority', label: 'Priority' },
-];
 
 function CollapsibleSection(props: {
   id: SectionId;
@@ -142,6 +122,29 @@ export function ProjectIssuesDisplayPanel({
   setDisplay,
   enableSubGroup = true,
 }: ProjectIssuesDisplayPanelProps) {
+  const { t } = useTranslation();
+
+  /** Order matches the work-items Display reference. */
+  const GROUP_OPTIONS: { value: SavedViewGroupBy; label: string }[] = [
+    { value: 'states', label: t('display.groupStates', 'States') },
+    { value: 'priority', label: t('display.groupPriority', 'Priority') },
+    { value: 'cycle', label: t('display.groupCycle', 'Cycle') },
+    { value: 'module', label: t('display.groupModule', 'Module') },
+    { value: 'labels', label: t('display.groupLabels', 'Labels') },
+    { value: 'assignees', label: t('display.groupAssignees', 'Assignees') },
+    { value: 'created_by', label: t('display.groupCreatedBy', 'Created by') },
+    { value: 'none', label: t('display.groupNone', 'None') },
+  ];
+
+  const ORDER_OPTIONS: { value: SavedViewOrderBy; label: string }[] = [
+    { value: 'manual', label: t('display.orderManual', 'Manual') },
+    { value: 'last_created', label: t('display.orderLastCreated', 'Last created') },
+    { value: 'last_updated', label: t('display.orderLastUpdated', 'Last updated') },
+    { value: 'start_date', label: t('display.orderStartDate', 'Start date') },
+    { value: 'due_date', label: t('display.orderDueDate', 'Due date') },
+    { value: 'priority', label: t('display.orderPriority', 'Priority') },
+  ];
+
   const [sections, setSections] = useState<Record<SectionId, boolean>>({
     properties: true,
     group: true,
@@ -173,7 +176,7 @@ export function ProjectIssuesDisplayPanel({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
         <CollapsibleSection
           id="properties"
-          title="Display Properties"
+          title={t('display.displayProperties', 'Display Properties')}
           expanded={sections.properties}
           onToggle={toggleSection}
         >
@@ -200,7 +203,7 @@ export function ProjectIssuesDisplayPanel({
 
         <CollapsibleSection
           id="group"
-          title="Group by"
+          title={t('display.groupBy', 'Group by')}
           expanded={sections.group}
           onToggle={toggleSection}
         >
@@ -226,7 +229,7 @@ export function ProjectIssuesDisplayPanel({
         {enableSubGroup && display.groupBy !== 'none' && (
           <CollapsibleSection
             id="subgroup"
-            title="Sub-group by"
+            title={t('display.subGroupBy', 'Sub-group by')}
             expanded={sections.subgroup}
             onToggle={toggleSection}
           >
@@ -248,7 +251,7 @@ export function ProjectIssuesDisplayPanel({
 
         <CollapsibleSection
           id="order"
-          title="Order by"
+          title={t('display.orderBy', 'Order by')}
           expanded={sections.order}
           onToggle={toggleSection}
         >
@@ -279,7 +282,7 @@ export function ProjectIssuesDisplayPanel({
               }))
             }
           />
-          Show sub-work items
+          {t('display.showSubWorkItems', 'Show sub-work items')}
         </label>
         <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] text-(--txt-primary) hover:bg-(--bg-layer-1-hover)">
           <input
@@ -293,7 +296,7 @@ export function ProjectIssuesDisplayPanel({
               }))
             }
           />
-          Show empty groups
+          {t('display.showEmptyGroups', 'Show empty groups')}
         </label>
       </div>
     </div>

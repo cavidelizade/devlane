@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Modal, Button } from '../ui';
 import { importerService } from '../../services/importerService';
 import type { ImporterApiResponse } from '../../api/types';
@@ -27,6 +28,7 @@ export function ImportCSVModal({
   projectId,
   onImported,
 }: ImportCSVModalProps) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<ImporterApiResponse | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -85,8 +87,14 @@ export function ImportCSVModal({
       setError(
         res?.data?.error ||
           (res?.status === 403
-            ? 'You do not have access to import into this project.'
-            : 'Could not start the import. Check the file and try again.'),
+            ? t(
+                'workItem.import.errorForbidden',
+                'You do not have access to import into this project.',
+              )
+            : t(
+                'workItem.import.errorGeneric',
+                'Could not start the import. Check the file and try again.',
+              )),
       );
     } finally {
       setUploading(false);
@@ -99,19 +107,23 @@ export function ImportCSVModal({
       : 0;
 
   return (
-    <Modal open={open} onClose={onClose} title="Import work items from CSV">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t('workItem.import.title', 'Import work items from CSV')}
+    >
       {job ? (
         <div className="space-y-4">
           <div>
             <div className="mb-1 flex items-center justify-between text-sm">
               <span className="font-medium text-(--txt-primary)">
                 {job.status === 'processing' || job.status === 'queued'
-                  ? 'Importing…'
+                  ? t('workItem.import.importing', 'Importing…')
                   : job.status === 'failed'
-                    ? 'Import failed'
+                    ? t('workItem.import.failed', 'Import failed')
                     : job.error_count > 0
-                      ? 'Imported with some errors'
-                      : 'Import complete'}
+                      ? t('workItem.import.withErrors', 'Imported with some errors')
+                      : t('workItem.import.complete', 'Import complete')}
               </span>
               <span className="text-(--txt-tertiary)">{percent}%</span>
             </div>
@@ -124,15 +136,21 @@ export function ImportCSVModal({
           </div>
           <dl className="grid grid-cols-3 gap-2 text-center text-sm">
             <div className="rounded-(--radius-md) border border-(--border-subtle) py-2">
-              <dt className="text-xs text-(--txt-tertiary)">Total</dt>
+              <dt className="text-xs text-(--txt-tertiary)">
+                {t('workItem.import.total', 'Total')}
+              </dt>
               <dd className="font-medium text-(--txt-primary)">{job.total_count}</dd>
             </div>
             <div className="rounded-(--radius-md) border border-(--border-subtle) py-2">
-              <dt className="text-xs text-(--txt-tertiary)">Created</dt>
+              <dt className="text-xs text-(--txt-tertiary)">
+                {t('workItem.import.created', 'Created')}
+              </dt>
               <dd className="font-medium text-(--txt-primary)">{job.processed_count}</dd>
             </div>
             <div className="rounded-(--radius-md) border border-(--border-subtle) py-2">
-              <dt className="text-xs text-(--txt-tertiary)">Errors</dt>
+              <dt className="text-xs text-(--txt-tertiary)">
+                {t('workItem.import.errors', 'Errors')}
+              </dt>
               <dd className="font-medium text-(--txt-primary)">{job.error_count}</dd>
             </div>
           </dl>
@@ -141,17 +159,24 @@ export function ImportCSVModal({
           )}
           {isTerminal(job.status) && (
             <div className="flex justify-end">
-              <Button onClick={onClose}>Done</Button>
+              <Button onClick={onClose}>{t('common.done', 'Done')}</Button>
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-sm text-(--txt-secondary)">
-            Upload a CSV with a <code className="text-xs">name</code> (or{' '}
-            <code className="text-xs">title</code>) column. Optional{' '}
-            <code className="text-xs">description</code>, <code className="text-xs">priority</code>,
-            and <code className="text-xs">state</code> columns are mapped when present.
+            <Trans
+              i18nKey="workItem.import.description"
+              defaults="Upload a CSV with a <0>name</0> (or <1>title</1>) column. Optional <2>description</2>, <3>priority</3>, and <4>state</4> columns are mapped when present."
+              components={[
+                <code className="text-xs" />,
+                <code className="text-xs" />,
+                <code className="text-xs" />,
+                <code className="text-xs" />,
+                <code className="text-xs" />,
+              ]}
+            />
           </p>
           <input
             type="file"
@@ -162,10 +187,12 @@ export function ImportCSVModal({
           {error && <p className="text-sm text-(--txt-danger-primary)">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button disabled={!file || uploading} onClick={handleUpload}>
-              {uploading ? 'Uploading…' : 'Start import'}
+              {uploading
+                ? t('workItem.import.uploading', 'Uploading…')
+                : t('workItem.import.startImport', 'Start import')}
             </Button>
           </div>
         </div>

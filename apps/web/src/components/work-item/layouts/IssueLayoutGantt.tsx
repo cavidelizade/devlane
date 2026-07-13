@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
@@ -45,6 +46,7 @@ export function IssueLayoutGantt({
   projectsById,
   onUpdateIssue,
 }: IssueLayoutProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const stateById = useMemo(() => new Map(states.map((s) => [s.id, s])), [states]);
 
@@ -173,7 +175,7 @@ export function IssueLayoutGantt({
           type="button"
           onClick={() => setShiftDays((s) => s - 7)}
           className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-          aria-label="Earlier"
+          aria-label={t('workItem.gantt.earlier', 'Earlier')}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -181,7 +183,7 @@ export function IssueLayoutGantt({
           type="button"
           onClick={() => setShiftDays((s) => s + 7)}
           className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary)"
-          aria-label="Later"
+          aria-label={t('workItem.gantt.later', 'Later')}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -193,7 +195,7 @@ export function IssueLayoutGantt({
           className="ml-2 rounded-(--radius-md) border border-(--border-subtle) px-2 py-0.5 text-[11px] text-(--txt-secondary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-primary)"
           onClick={() => setShiftDays(0)}
         >
-          Reset
+          {t('common.reset', 'Reset')}
         </button>
         <div className="ml-auto flex items-center gap-1">
           <button
@@ -201,7 +203,7 @@ export function IssueLayoutGantt({
             onClick={() => setZoomIdx((z) => Math.max(0, z - 1))}
             disabled={zoomIdx === 0}
             className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary) disabled:opacity-40"
-            aria-label="Zoom out"
+            aria-label={t('common.zoomOut', 'Zoom out')}
           >
             <ZoomOut className="h-4 w-4" />
           </button>
@@ -210,19 +212,25 @@ export function IssueLayoutGantt({
             onClick={() => setZoomIdx((z) => Math.min(ZOOM_LEVELS.length - 1, z + 1))}
             disabled={zoomIdx === ZOOM_LEVELS.length - 1}
             className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-md) text-(--txt-icon-tertiary) hover:bg-(--bg-layer-1-hover) hover:text-(--txt-icon-secondary) disabled:opacity-40"
-            aria-label="Zoom in"
+            aria-label={t('common.zoomIn', 'Zoom in')}
           >
             <ZoomIn className="h-4 w-4" />
           </button>
           <span className="ml-1 text-[11px] text-(--txt-tertiary)">
-            {dated.length} dated · {undated.length} undated
+            {t('workItem.gantt.datedUndated', '{{dated}} dated · {{undated}} undated', {
+              dated: dated.length,
+              undated: undated.length,
+            })}
           </span>
         </div>
       </div>
 
       {dated.length === 0 ? (
         <p className="rounded-(--radius-md) border border-dashed border-(--border-subtle) bg-(--bg-surface-1) px-3 py-6 text-center text-sm text-(--txt-tertiary)">
-          No work items have both a start and a target date. Add dates to plot bars on the timeline.
+          {t(
+            'workItem.gantt.empty',
+            'No work items have both a start and a target date. Add dates to plot bars on the timeline.',
+          )}
         </p>
       ) : (
         <div className="overflow-auto rounded-(--radius-md) border border-(--border-subtle)">
@@ -230,7 +238,7 @@ export function IssueLayoutGantt({
             {/* Sticky sidebar: id + name */}
             <div className="sticky left-0 z-10 w-64 shrink-0 border-r border-(--border-subtle) bg-(--bg-surface-1)">
               <div className="h-9 border-b border-(--border-subtle) px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-(--txt-tertiary)">
-                Work item
+                {t('common.workItem', 'Work item')}
               </div>
               <ul>
                 {dated.map((issue) => (
@@ -368,7 +376,7 @@ export function IssueLayoutGantt({
       {undated.length > 0 && (
         <details className="rounded-(--radius-md) border border-(--border-subtle) bg-(--bg-surface-1)">
           <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-(--txt-secondary)">
-            Undated · {undated.length}
+            {t('workItem.gantt.undated', 'Undated · {{count}}', { count: undated.length })}
           </summary>
           <ul className="border-t border-(--border-subtle) divide-y divide-(--border-subtle)">
             {undated.map((issue) => (
@@ -380,8 +388,8 @@ export function IssueLayoutGantt({
                   <PriorityIcon priority={issue.priority as Priority | null | undefined} />
                   <span className="truncate">{issue.name}</span>
                   <span className="ml-auto text-[11px] text-(--txt-tertiary)">
-                    {issue.start_date ? '' : 'no start · '}
-                    {issue.target_date ? '' : 'no target'}
+                    {issue.start_date ? '' : t('workItem.gantt.noStart', 'no start · ')}
+                    {issue.target_date ? '' : t('workItem.gantt.noTarget', 'no target')}
                   </span>
                 </Link>
               </li>
