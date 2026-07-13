@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -62,7 +63,13 @@ func seedDevData(ctx context.Context, db *gorm.DB) error {
 	userStore := store.NewUserStore(db)
 
 	// Idempotency: if the demo user already exists, assume the DB is seeded.
-	if u, _ := userStore.GetByEmail(ctx, seedEmail); u != nil {
+	// A real lookup error (not just "not found") should surface, not be treated
+	// as "needs seeding".
+	existing, err := userStore.GetByEmail(ctx, seedEmail)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("check demo user: %w", err)
+	}
+	if existing != nil {
 		fmt.Printf("seed: %s already exists — nothing to do\n", seedEmail)
 		return nil
 	}
@@ -81,17 +88,29 @@ func seedDevData(ctx context.Context, db *gorm.DB) error {
 	// Make the demo user an instance admin and mark the instance as set up, so
 	// the app is immediately usable without the first-run setup wizard.
 	admins := store.NewInstanceAdminStore(db)
-	if n, _ := admins.CountActive(ctx); n == 0 {
-		_ = admins.Create(ctx, &model.InstanceAdmin{UserID: user.ID, Role: model.RoleOwner, IsVerified: true})
+	adminCount, err := admins.CountActive(ctx)
+	if err != nil {
+		return fmt.Errorf("count instance admins: %w", err)
+	}
+	if adminCount == 0 {
+		if err := admins.Create(ctx, &model.InstanceAdmin{UserID: user.ID, Role: model.RoleOwner, IsVerified: true}); err != nil {
+			return fmt.Errorf("create instance admin: %w", err)
+		}
 	}
 	settings := store.NewInstanceSettingStore(db)
-	if row, _ := settings.Get(ctx, "general"); row == nil {
-		_ = settings.Upsert(ctx, "general", model.JSONMap{
+	generalRow, err := settings.Get(ctx, "general")
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("read instance settings: %w", err)
+	}
+	if generalRow == nil {
+		if err := settings.Upsert(ctx, "general", model.JSONMap{
 			"instance_id":                     "devlocalseed00000000000",
 			"admin_email":                     seedEmail,
 			"instance_name":                   "Devlane (local)",
 			"only_admin_can_create_workspace": false,
-		})
+		}); err != nil {
+			return fmt.Errorf("seed instance settings: %w", err)
+		}
 	}
 
 	wsSvc := service.NewWorkspaceService(store.NewWorkspaceStore(db), store.NewWorkspaceInviteStore(db), userStore)
@@ -128,11 +147,13 @@ func seedDevData(ctx context.Context, db *gorm.DB) error {
 			return fmt.Errorf("create state %q: %w", st.name, err)
 		}
 	}
+	allStates, err := stateStore.ListByProjectID(ctx, proj.ID)
+	if err != nil {
+		return fmt.Errorf("list seeded states: %w", err)
+	}
 	stateByName := map[string]uuid.UUID{}
-	if all, err := stateStore.ListByProjectID(ctx, proj.ID); err == nil {
-		for i := range all {
-			stateByName[all[i].Name] = all[i].ID
-		}
+	for i := range allStates {
+		stateByName[allStates[i].Name] = allStates[i].ID
 	}
 
 	issueSvc := service.NewIssueService(store.NewIssueStore(db), store.NewProjectStore(db), store.NewWorkspaceStore(db))
