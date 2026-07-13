@@ -191,7 +191,7 @@ export function UpdateModuleModal({
                 <span className="text-(--txt-icon-tertiary)" aria-hidden>
                   ⏺
                 </span>
-                {statusLabel}
+                {t(`module.status.${status}`, statusLabel)}
                 <span className="text-(--txt-icon-tertiary)" aria-hidden>
                   ▾
                 </span>
@@ -208,7 +208,7 @@ export function UpdateModuleModal({
                         setStatusDropdownOpen(false);
                       }}
                     >
-                      {s.label}
+                      {t(`module.status.${s.id}`, s.label)}
                       {s.id === status && <span className="text-(--txt-icon-tertiary)">✓</span>}
                     </button>
                   ))}

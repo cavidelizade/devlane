@@ -188,7 +188,7 @@ export function WorkspaceViewsFiltersPanel({
             <span className="flex size-4 shrink-0 items-center justify-center">
               {STATE_GROUP_ICONS[g]}
             </span>
-            <span>{STATE_GROUP_LABELS[g]}</span>
+            <span>{t(`stateGroup.${g}`, STATE_GROUP_LABELS[g])}</span>
           </label>
         ))}
       </CollapsibleSection>

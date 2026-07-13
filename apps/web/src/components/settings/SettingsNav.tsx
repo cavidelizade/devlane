@@ -96,7 +96,7 @@ export function SettingsNav({
             {ACCOUNT_SECTIONS_PROFILE.map(({ id, label, icon }) => (
               <SectionNavButton
                 key={id}
-                label={label}
+                label={t(`settings.section.${id}`, label)}
                 icon={icon}
                 active={accountSection === id}
                 onClick={() => setAccountSection(id)}
@@ -108,7 +108,7 @@ export function SettingsNav({
             {ACCOUNT_SECTIONS_DEVELOPER.map(({ id, label, icon }) => (
               <SectionNavButton
                 key={id}
-                label={label}
+                label={t(`settings.section.${id}`, label)}
                 icon={icon}
                 active={accountSection === id}
                 onClick={() => setAccountSection(id)}
@@ -159,7 +159,7 @@ export function SettingsNav({
                       {PROJECT_SECTIONS.map(({ id, label, icon }) => (
                         <SectionNavButton
                           key={id}
-                          label={label}
+                          label={t(`settings.section.${id}`, label)}
                           icon={icon}
                           active={projectSection === id}
                           onClick={() => setProjectSection(proj.id, id)}
@@ -193,7 +193,7 @@ export function SettingsNav({
             {WORKSPACE_SECTIONS.slice(0, 5).map(({ id, label, icon }) => (
               <SectionNavButton
                 key={id}
-                label={label}
+                label={t(`settings.section.${id}`, label)}
                 icon={icon}
                 active={section === id}
                 onClick={() => setSection(id)}
@@ -205,7 +205,7 @@ export function SettingsNav({
             {WORKSPACE_SECTIONS.slice(5).map(({ id, label, icon }) => (
               <SectionNavButton
                 key={id}
-                label={label}
+                label={t(`settings.section.${id}`, label)}
                 icon={icon}
                 active={section === id}
                 onClick={() => setSection(id)}

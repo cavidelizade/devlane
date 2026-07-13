@@ -254,7 +254,7 @@ export function ModuleWorkItemsFiltersPanel({
                       checked={checked}
                       onToggle={() => toggleStateGroup(g)}
                       icon={STATE_GROUP_ICONS[g]}
-                      label={STATE_GROUP_LABELS[g]}
+                      label={t(`stateGroup.${g}`, STATE_GROUP_LABELS[g])}
                     />
                   );
                 })}

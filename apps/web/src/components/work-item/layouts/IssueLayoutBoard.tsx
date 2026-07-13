@@ -150,7 +150,7 @@ export function IssueLayoutBoard({
         (g) => presentGroups.has(g) || (buckets.get(g)?.length ?? 0) > 0,
       ).map((g) => ({
         key: g,
-        title: STATE_GROUP_LABELS[g] ?? g,
+        title: t(`stateGroup.${g}`, STATE_GROUP_LABELS[g] ?? g),
         color: undefined as string | undefined,
         items: buckets.get(g) ?? [],
       }));

@@ -67,7 +67,7 @@ export function IssueRelationsPanel({
             >
               {Object.entries(RELATION_TYPE_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>
-                  {l}
+                  {t(`workItem.relationType.${v}`, l)}
                 </option>
               ))}
             </select>
@@ -140,7 +140,7 @@ export function IssueRelationsPanel({
             return (
               <div key={rtype}>
                 <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-(--txt-tertiary)">
-                  {RELATION_TYPE_LABELS[rtype]}
+                  {t(`workItem.relationType.${rtype}`, RELATION_TYPE_LABELS[rtype])}
                 </p>
                 <div className="space-y-0.5">
                   {group.map((rel) => (

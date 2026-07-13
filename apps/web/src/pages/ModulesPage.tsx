@@ -481,7 +481,7 @@ export function ModulesPage() {
                 aria-expanded={statusMenuOpenId === mod.id}
               >
                 <StatusDot statusId={mod.status} />
-                <span>{statusLabel}</span>
+                <span>{t(`module.status.${mod.status}`, statusLabel)}</span>
                 <span className="text-(--txt-icon-tertiary)" aria-hidden>
                   ▾
                 </span>
@@ -514,7 +514,7 @@ export function ModulesPage() {
                     >
                       <span className="flex items-center gap-2">
                         <StatusDot statusId={s.id} />
-                        {s.label}
+                        {t(`module.status.${s.id}`, s.label)}
                       </span>
                       {mod.status === s.id && <span className="text-(--txt-icon-tertiary)">✓</span>}
                     </button>

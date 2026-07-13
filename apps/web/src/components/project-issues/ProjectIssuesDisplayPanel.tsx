@@ -194,7 +194,7 @@ export function ProjectIssuesDisplayPanel({
                       : 'border-(--border-subtle) bg-(--bg-layer-1) text-(--txt-secondary) hover:bg-(--bg-layer-1-hover)'
                   }`}
                 >
-                  {SAVED_VIEW_DISPLAY_PROPERTY_LABELS[prop]}
+                  {t(`display.property.${prop}`, SAVED_VIEW_DISPLAY_PROPERTY_LABELS[prop])}
                 </button>
               );
             })}

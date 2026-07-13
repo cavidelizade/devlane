@@ -239,7 +239,7 @@ export function ModuleFiltersPanel({ workspaceSlug, onOpenDateModal }: ModuleFil
                 className="rounded border-(--border-subtle)"
               />
               <ModuleStatusIcon statusId={s.id} />
-              <span>{s.label}</span>
+              <span>{t(`module.status.${s.id}`, s.label)}</span>
             </label>
           ))}
         </CollapsibleSection>

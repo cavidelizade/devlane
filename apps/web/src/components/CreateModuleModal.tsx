@@ -202,7 +202,7 @@ export function CreateModuleModal({
                 <span className="text-(--txt-icon-tertiary)" aria-hidden>
                   <BacklogIcon />
                 </span>
-                {statusLabel}
+                {t(`module.status.${status}`, statusLabel)}
                 <ChevronDownIcon />
               </button>
               {statusDropdownOpen && (
@@ -217,7 +217,7 @@ export function CreateModuleModal({
                       }}
                       className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-(--txt-primary) hover:bg-(--bg-layer-1-hover)"
                     >
-                      {opt.label}
+                      {t(`module.status.${opt.id}`, opt.label)}
                       {status === opt.id && (
                         <span className="text-(--txt-primary)">
                           <CheckIcon />

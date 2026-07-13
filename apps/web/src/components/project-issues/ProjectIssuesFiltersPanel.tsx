@@ -189,7 +189,7 @@ export function ProjectIssuesFiltersPanel({
                 }));
               }}
               icon={STATE_GROUP_ICONS[g]}
-              label={STATE_GROUP_LABELS[g]}
+              label={t(`stateGroup.${g}`, STATE_GROUP_LABELS[g])}
             />
           ))}
         </CollapsibleSection>

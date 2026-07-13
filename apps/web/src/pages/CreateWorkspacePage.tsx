@@ -150,7 +150,7 @@ export function CreateWorkspacePage() {
               >
                 {ORGANIZATION_SIZE_OPTIONS.map((opt) => (
                   <option key={opt.value || 'empty'} value={opt.value}>
-                    {opt.label}
+                    {opt.value === '' ? t('workspace.orgSize.selectRange', opt.label) : opt.label}
                   </option>
                 ))}
               </select>
