@@ -7,7 +7,7 @@ import { useModulesFilter } from '../contexts/ModulesFilterContext';
 import { workspaceService } from '../services/workspaceService';
 import { projectService } from '../services/projectService';
 import { moduleService, type ModuleProgress } from '../services/moduleService';
-import { useModuleFavorites } from '../hooks/useModuleFavorites';
+import { useWorkspaceFavorites } from '../hooks/useWorkspaceFavorites';
 import type {
   WorkspaceApiResponse,
   ProjectApiResponse,
@@ -177,10 +177,21 @@ export function ModulesPage() {
   const [editModule, setEditModule] = useState<ModuleApiResponse | null>(null);
   const [editOpenDatePicker, setEditOpenDatePicker] = useState(false);
   const [quickDateModule, setQuickDateModule] = useState<ModuleApiResponse | null>(null);
-  const { favoriteModuleIds, toggleFavorite, isFavorite } = useModuleFavorites(
-    workspaceSlug,
-    projectId,
+  const { favorites, isFavorited, toggleEntity } = useWorkspaceFavorites(workspaceSlug);
+  const favoriteModuleIds = useMemo(
+    () => favorites.filter((f) => f.entity_type === 'module').map((f) => f.entity_identifier),
+    [favorites],
   );
+  const isFavorite = (id: string) => isFavorited('module', id);
+  const toggleFavorite = (mod: { id: string; name: string }) => {
+    if (!projectId) return;
+    void toggleEntity({
+      entity_type: 'module',
+      entity_id: mod.id,
+      project_id: projectId,
+      name: mod.name,
+    });
+  };
   useDocumentTitle('Modules');
 
   const searchQuery = (filter.search ?? '').trim().toLowerCase();
@@ -538,7 +549,7 @@ export function ModulesPage() {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                void toggleFavorite(mod.id);
+                void toggleFavorite(mod);
               }}
             >
               {fav ? (

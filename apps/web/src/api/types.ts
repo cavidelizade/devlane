@@ -339,6 +339,21 @@ export const IntakeStatus = {
 } as const;
 
 /** An intake ("inbox") item: the triage row plus its work-item summary. */
+/** A user favorite: a favorited entity (cycle/module) or a folder grouping them. */
+export interface FavoriteApiResponse {
+  id: string;
+  name: string;
+  entity_type: string;
+  entity_identifier: string;
+  is_folder: boolean;
+  parent_id?: string | null;
+  sort_order: number;
+  workspace_id: string;
+  project_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface IntakeItemApiResponse {
   id: string;
   intake_id: string;

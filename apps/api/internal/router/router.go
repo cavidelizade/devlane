@@ -239,7 +239,8 @@ func New(cfg Config) *gin.Engine {
 	}
 	projectHandler := &handler.ProjectHandler{Project: projectSvc, State: stateSvc}
 	notifPrefHandler := &handler.NotificationPreferenceHandler{Prefs: userNotifPrefStore, Ws: workspaceStore, Projects: projectSvc}
-	favoriteHandler := &handler.FavoriteHandler{Project: projectSvc, Favorites: userFavoriteStore}
+	favoriteSvc := service.NewFavoriteService(userFavoriteStore, workspaceStore, projectSvc)
+	favoriteHandler := &handler.FavoriteHandler{Project: projectSvc, Favorites: userFavoriteStore, Fav: favoriteSvc}
 	stateHandler := &handler.StateHandler{State: stateSvc}
 	labelHandler := &handler.LabelHandler{Label: labelSvc}
 	searchHandler := &handler.SearchHandler{Svc: searchSvc}
@@ -283,6 +284,10 @@ func New(cfg Config) *gin.Engine {
 		api.POST("/users/me/tokens/", authHandler.CreateToken)
 		api.DELETE("/users/me/tokens/:id/", authHandler.RevokeToken)
 		api.GET("/users/me/favorite-projects/", favoriteHandler.ListFavoriteProjects)
+		api.GET("/workspaces/:slug/favorites/", favoriteHandler.ListFavorites)
+		api.POST("/workspaces/:slug/favorites/", favoriteHandler.CreateFavorite)
+		api.PATCH("/workspaces/:slug/favorites/:favId/", favoriteHandler.UpdateFavorite)
+		api.DELETE("/workspaces/:slug/favorites/:favId/", favoriteHandler.DeleteFavorite)
 		api.GET("/instance/settings/", instanceSettingsHandler.GetSettings)
 		api.PATCH("/instance/settings/:key", instanceSettingsHandler.UpdateSetting)
 		api.GET("/instance/unsplash/search", instanceSettingsHandler.UnsplashSearch)
