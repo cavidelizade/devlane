@@ -125,6 +125,9 @@ export function CommentEditor({
     } catch {
       return;
     }
+    // The await above may outlive the editor (parent unmounts / cancels the
+    // edit); clearing a destroyed editor throws.
+    if (editor.isDestroyed) return;
     editor.commands.clearContent();
     setIsEmpty(true);
   };
